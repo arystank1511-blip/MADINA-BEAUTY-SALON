@@ -1,0 +1,12 @@
+packages:
+  - apps/*
+overrides:
+  deepmerge-ts: 8.0.2
+  esbuild: 0.28.1
+  shell-quote: 1.9.0
+onlyBuiltDependencies:
+  - '@nestjs/core'
+  - '@prisma/client'
+  - '@prisma/engines'
+  - prisma
+  - esbuild

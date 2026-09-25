@@ -1,0 +1,32 @@
+{
+  "name": "@forma/web",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "tsc -b && vite build",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@fontsource-variable/manrope": "5.2.8",
+    "@hookform/resolvers": "5",
+    "@js-temporal/polyfill": "0.5.1",
+    "@tanstack/react-query": "5",
+    "lucide-react": "0.555.0",
+    "react": "19",
+    "react-dom": "19",
+    "react-hook-form": "7",
+    "react-router-dom": "^7.18.4",
+    "zod": "4"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "4.1.17",
+    "@types/react": "19.2.5",
+    "@types/react-dom": "19.2.3",
+    "@vitejs/plugin-react": "5",
+    "tailwindcss": "4.1.17",
+    "typescript": "5.9.3",
+    "vite": "^7.3.6"
+  }
+}

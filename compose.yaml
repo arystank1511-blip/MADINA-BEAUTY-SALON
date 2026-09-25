@@ -1,0 +1,73 @@
+name: forma
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: forma
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-forma_dev}
+      POSTGRES_DB: forma
+    volumes:
+      - postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U forma -d forma']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  migrate:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    environment:
+      DATABASE_URL: postgresql://forma:${POSTGRES_PASSWORD:-forma_dev}@db:5432/forma
+    command: ['pnpm', 'db:migrate']
+    depends_on:
+      db:
+        condition: service_healthy
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    environment:
+      DATABASE_URL: postgresql://forma:${POSTGRES_PASSWORD:-forma_dev}@db:5432/forma
+      APP_ORIGIN: ${APP_ORIGIN:-http://localhost:8080}
+      NODE_ENV: ${NODE_ENV:-development}
+      DEMO_MODE: ${DEMO_MODE:-true}
+      TRUST_PROXY: '1'
+      SALON_NAME: ${SALON_NAME:-FORMA}
+      SALON_CURRENCY: ${SALON_CURRENCY:-KZT}
+      SALON_TIMEZONE: ${SALON_TIMEZONE:-Asia/Almaty}
+      SALON_ADDRESS: ${SALON_ADDRESS:-Демонстрационный салон · Алматы}
+      SALON_CONTACT: ${SALON_CONTACT:-hello@forma.example}
+      SALON_HOURS: ${SALON_HOURS:-Ежедневно · 10:00–19:00}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:3000/api/v1/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    ports:
+      - '8080:80'
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'wget', '-q', '--spider', 'http://localhost/']
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+volumes:
+  postgres:

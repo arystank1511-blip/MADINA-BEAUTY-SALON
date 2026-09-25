@@ -1,0 +1,30 @@
+{
+  "name": "forma",
+  "private": true,
+  "version": "1.0.0",
+  "packageManager": "pnpm@10.30.3",
+  "engines": {
+    "node": ">=22.12 <25"
+  },
+  "scripts": {
+    "dev": "concurrently -k \"pnpm --filter @forma/api dev\" \"pnpm --filter @forma/web dev\"",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "eslint apps --max-warnings 0",
+    "format": "prettier --write .",
+    "test": "pnpm --filter @forma/api test",
+    "test:integration": "pnpm --filter @forma/api test:integration",
+    "test:e2e": "playwright test",
+    "db:generate": "pnpm --filter @forma/api db:generate",
+    "db:migrate": "pnpm --filter @forma/api db:migrate",
+    "db:seed": "pnpm --filter @forma/api db:seed"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.39.1",
+    "eslint": "9.39.1",
+    "typescript-eslint": "8.48.0",
+    "prettier": "3.7.4",
+    "concurrently": "9.2.1",
+    "@playwright/test": "1.58.2"
+  }
+}

@@ -1,0 +1,125 @@
+generator client {
+  provider = "prisma-client-js"
+}
+datasource db {
+  provider = "postgresql"
+  url = env("DATABASE_URL")
+}
+enum Role {
+  CUSTOMER
+  ADMIN
+}
+enum AppointmentStatus {
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+}
+model User {
+  id String @id @default(uuid()) @db.Uuid
+  name String
+  email String @unique
+  passwordHash String
+  role Role @default(CUSTOMER)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  sessions Session[]
+  appointments Appointment[] @relation("Customer")
+  cancellations Appointment[] @relation("Canceller")
+}
+model Session {
+  id String @id @default(uuid()) @db.Uuid
+  tokenHash String @unique
+  userId String @db.Uuid
+  expiresAt DateTime @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+  @@index([userId])
+  @@index([expiresAt])
+}
+model Service {
+  id String @id @default(uuid()) @db.Uuid
+  name String
+  description String
+  priceMinor Int
+  durationMinutes Int
+  bufferAfterMinutes Int
+  isActive Boolean @default(true)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  masters MasterService[]
+  appointments Appointment[]
+}
+model Master {
+  id String @id @default(uuid()) @db.Uuid
+  name String
+  description String
+  avatarUrl String?
+  isActive Boolean @default(true)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  services MasterService[]
+  workingHours WorkingHours[]
+  breaks RecurringBreak[]
+  timeOffs TimeOff[]
+  appointments Appointment[]
+}
+model MasterService {
+  masterId String @db.Uuid
+  serviceId String @db.Uuid
+  master Master @relation(fields:[masterId],references:[id])
+  service Service @relation(fields:[serviceId],references:[id])
+  @@id([masterId,serviceId])
+  @@index([serviceId])
+}
+model WorkingHours {
+  id String @id @default(uuid()) @db.Uuid
+  masterId String @db.Uuid
+  weekday Int
+  startTime String @db.VarChar(5)
+  endTime String @db.VarChar(5)
+  master Master @relation(fields:[masterId],references:[id])
+  @@unique([masterId,weekday])
+}
+model RecurringBreak {
+  id String @id @default(uuid()) @db.Uuid
+  masterId String @db.Uuid
+  weekday Int
+  startTime String @db.VarChar(5)
+  endTime String @db.VarChar(5)
+  master Master @relation(fields:[masterId],references:[id])
+  @@index([masterId,weekday])
+}
+model TimeOff {
+  id String @id @default(uuid()) @db.Uuid
+  masterId String @db.Uuid
+  startsAt DateTime @db.Timestamptz(3)
+  endsAt DateTime @db.Timestamptz(3)
+  reason String
+  master Master @relation(fields:[masterId],references:[id])
+  @@index([masterId,startsAt,endsAt])
+}
+model Appointment {
+  id String @id @default(uuid()) @db.Uuid
+  customerId String @db.Uuid
+  masterId String @db.Uuid
+  serviceId String @db.Uuid
+  startsAt DateTime @db.Timestamptz(3)
+  endsAt DateTime @db.Timestamptz(3)
+  occupiedUntil DateTime @db.Timestamptz(3)
+  status AppointmentStatus @default(CONFIRMED)
+  serviceName String
+  priceMinor Int
+  durationMinutes Int
+  bufferAfterMinutes Int
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  cancelledAt DateTime? @db.Timestamptz(3)
+  cancelledById String? @db.Uuid
+  customer User @relation("Customer",fields:[customerId],references:[id])
+  cancelledBy User? @relation("Canceller",fields:[cancelledById],references:[id])
+  master Master @relation(fields:[masterId],references:[id])
+  service Service @relation(fields:[serviceId],references:[id])
+  @@index([customerId,startsAt])
+  @@index([masterId,startsAt])
+  @@index([status,startsAt])
+}

@@ -1,0 +1,138 @@
+# FORMA
+
+Полноценный MVP онлайн-записи в парикмахерскую: **React + NestJS + PostgreSQL + Prisma**. Русский интерфейс, личный кабинет и административное управление. Главная гарантия: пересекающиеся посещения одного мастера запрещены самой PostgreSQL.
+
+![Главная страница](docs/screenshots/home-1440.png)
+
+## Возможности
+
+- Услуга → подходящий мастер → дата и время → подтверждение. Выбор сохраняется при входе.
+- Длительность и буфер, рабочие часы каждого мастера, регулярные перерывы и отсутствия.
+- Записи клиента, отмена будущего посещения, неизменяемые снимки цены и длительности.
+- Администратор: услуги, мастера, наборы услуг, расписание, отсутствия, создание/отмена/завершение посещений, фильтры и страницы списков.
+- HttpOnly-сессии с SHA-256 токенов в БД, scrypt паролей, серверные роли, CSRF, лимит попыток входа.
+- Защита конкурентного бронирования между экземплярами сервера: блокировки PostgreSQL + GiST EXCLUDE.
+- Swagger, SQL-миграции, повторяемый demo seed, unit/integration/Playwright тесты, GitHub Actions.
+
+## Быстрый запуск Docker
+
+Нужен Docker Engine с Compose v2. Из корня репозитория:
+
+```sh
+docker compose up --build -d --wait
+docker compose exec api pnpm db:seed
+```
+
+Открыть **http://localhost:8080**. Swagger: **http://localhost:8080/api/docs**. Compose сам применяет миграции перед запуском API. Для демонстрации он по умолчанию использует development-режим, локальные cookie и демонстрационные реквизиты БД. Не выставляйте такую конфигурацию в интернет.
+
+Если используете корневой `.env`, установите `APP_ORIGIN=http://localhost:8080` для Compose. Origin должен точно совпадать с адресом в браузере.
+
+```sh
+docker compose logs -f api
+docker compose down
+```
+
+Данные хранятся в volume `forma_postgres`. Не используйте `down -v`, если нужно сохранить записи.
+
+## Локальная разработка без Docker
+
+Проверенный runtime: **Node 24.15.0**, **pnpm 10.30.3**, **PostgreSQL 17**. Допустим Node 22.12–24.x. Версии библиотек и lockfile зафиксированы.
+
+```sh
+corepack enable
+corepack prepare pnpm@10.30.3 --activate
+pnpm install --frozen-lockfile
+```
+
+Создайте отдельные PostgreSQL базы `forma` и `forma_test`; пользователь миграций должен иметь право установить `btree_gist`.
+
+```sh
+cp .env.example apps/api/.env
+# Отредактируйте DATABASE_URL и TEST_DATABASE_URL под свою PostgreSQL.
+pnpm db:generate
+pnpm db:migrate
+pnpm db:seed
+pnpm dev
+```
+
+Windows PowerShell: `Copy-Item .env.example apps/api/.env`. Открыть **http://localhost:5173**; Vite перенаправляет `/api` на порт 3000. Swagger: **http://localhost:5173/api/docs** (тот же origin для Try it out). `localhost` и `127.0.0.1` являются разными Origin; используйте `localhost` либо измените `APP_ORIGIN`.
+
+API dev-команда сначала компилирует TypeScript, затем запускает Node в watch-режиме по скомпилированным файлам. После правок API выполняйте `pnpm --filter @forma/api build` в другом терминале. Frontend обновляется автоматически через Vite.
+
+## Демо-доступ
+
+| Роль          | Email                  | Пароль           |
+| ------------- | ---------------------- | ---------------- |
+| Администратор | `admin@forma.example`  | `FormaDemo2026!` |
+| Клиент        | `client@forma.example` | `FormaDemo2026!` |
+| Клиент        | `anna@forma.example`   | `FormaDemo2026!` |
+
+Seed разрешён только при `DEMO_MODE=true` и `NODE_ENV!=production`. В production демонстрационные пароли не создаются. Публичная регистрация всегда создаёт CUSTOMER. Повторный seed не обновляет существующие профили, цены или расписания и не удаляет данные. Даты демо рассчитываются от первого запуска seed; он намеренно не переносит уже созданные посещения при следующих запусках.
+
+## Настройки
+
+Файл `.env.example` содержит полный набор. `SALON_NAME` — единственный источник названия в интерфейсе; `SALON_CURRENCY`, `SALON_TIMEZONE`, `SALON_ADDRESS`, `SALON_CONTACT`, `SALON_HOURS` выдаются frontend через `/api/v1/config`. По умолчанию KZT и Asia/Almaty. Цены хранятся целыми числами в минимальных единицах валюты.
+
+`APP_ORIGIN` обязателен для CSRF и должен быть точным origin без завершающего `/`. Production: единый HTTPS origin, frontend на `/`, API на `/api`. `NODE_ENV=production` включает Secure cookie. Без HTTPS такие cookie браузер не отправит.
+
+## Проверки
+
+```sh
+pnpm build
+pnpm typecheck
+pnpm lint
+pnpm exec prettier --check .
+pnpm test
+```
+
+Интеграционные тесты работают **только** с URL, чей database pathname заканчивается на `/forma_test`. Тесты создают уникальные фикстуры, не очищают чужую БД и не используют SQLite или моки.
+
+```sh
+# Bash: укажите собственные тестовые реквизиты.
+export DATABASE_URL=postgresql://forma:forma_dev@localhost:5432/forma_test
+export TEST_DATABASE_URL=$DATABASE_URL
+pnpm db:migrate
+pnpm --filter @forma/api build
+pnpm test:integration
+```
+
+В PowerShell: `$env:DATABASE_URL='postgresql://.../forma_test'; $env:TEST_DATABASE_URL=$env:DATABASE_URL`.
+
+Тесты отправляют запросы через два независимо созданных Nest-приложения и два Prisma connection pool с общей PostgreSQL. Проверяются один и разные начала, 10 параллельных запросов, разные мастера, прямое нарушение EXCLUDE, роли, CSRF, чужие записи, снимки цены и конфликтующие изменения расписания.
+
+Playwright требует запущенный продукт с demo seed (в CI это изолированная `forma_test`). Он создаёт и отменяет демо-запись, временно меняет цену демо-услуги и возвращает её обратно. Не запускайте его на рабочем салоне.
+
+```sh
+pnpm exec playwright install chromium
+pnpm test:e2e
+```
+
+Переменная `E2E_BASE_URL` меняет адрес, по умолчанию `http://localhost:5173`. Отчёт: `playwright-report/index.html`. Скриншоты: `docs/screenshots/`.
+
+## API
+
+- Swagger UI: `/api/docs`, OpenAPI JSON: `/api/openapi.json`.
+- Префикс маршрутов: `/api/v1`.
+- Liveness: `/api/v1/health`; readiness: `/api/v1/ready`.
+- Сессия: HttpOnly cookie `forma_session`, действительна 7 дней; logout отзывает её.
+- Изменяющие запросы: `Origin: <APP_ORIGIN>` и `X-CSRF-Protection: 1`. CORS отключён. Swagger автоматически добавляет X-CSRF-Protection; открывайте его через тот же origin, что и сайт. Для curl передайте оба заголовка вручную.
+
+```sh
+curl -c cookies.txt http://localhost:3000/api/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -H 'Origin: http://localhost:5173' \
+  -H 'X-CSRF-Protection: 1' \
+  -d '{"email":"client@forma.example","password":"FormaDemo2026!"}'
+```
+
+Ошибка конфликта: HTTP 409, `{"code":"SLOT_UNAVAILABLE","message":"Это время уже занято. Выберите другой слот."}`. Другие ошибки не маскируются под конфликт. Клиент сбрасывает только время, сохраняет услугу/мастера/дату и обновляет доступность.
+
+## Архитектура и ограничения
+
+Подробности: [архитектура и ERD](docs/ARCHITECTURE.md), [развёртывание](docs/DEPLOYMENT.md), [источники](docs/REFERENCES.md), [техническое задание](docs/specification.txt), [отчёт проверок](docs/VERIFICATION.md).
+
+Это один салон, одна услуга и один мастер на посещение. Нет оплаты, уведомлений, мультифилиальности, кабинета мастера, аналитики и переноса отдельной командой. Перенос: отмена и новая запись. Мастер занят всю процедуру и буфер, в том числе во время ожидания окрашивания.
+
+Ограничитель входа/регистрации хранится в памяти экземпляра (20 попыток/минуту/IP); при нескольких API-инстансах нужен общий rate limit на доверенном reverse proxy. В Compose API доверяет одному hop, а nginx перезаписывает входящий `X-Forwarded-For` реальным адресом клиента. Локально доверие к прокси выключено. Бронирование от этого ограничения не зависит и защищено общей БД.
+
+Фотографии команды синтетические, фото салона демонстрационное. Контакты `.example` не используются для реальной связи.

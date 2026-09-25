@@ -1,0 +1,8 @@
+node_modules
+dist
+pnpm-lock.yaml
+test-results
+playwright-report
+docs/screenshots
+apps/web/public/images
+docs/specification.txt
