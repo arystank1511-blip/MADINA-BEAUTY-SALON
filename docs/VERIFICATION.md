@@ -15,4 +15,14 @@
 - GitHub Actions: [успешный прогон](https://github.com/arystank1511-blip/forma-salon-booking/actions/runs/36192941042) для `fa25bf4`. Повторно прошли сборка, статические проверки, 9 unit, 14 integration и 6 Playwright сценариев на Linux.
 - Docker проверен в GitHub Actions: оба образа собраны, Compose запущен с чистой PostgreSQL, обе миграции применены, health checks зелёные, demo seed выполнен, readiness и вход через nginx успешны. Первый прогон обнаружил проблему health check с `localhost`; явный IPv4 `127.0.0.1` исправил её.
 
-Код опубликован в приватном [GitHub-репозитории](https://github.com/arystank1511-blip/forma-salon-booking). Приложение запущено локально на http://localhost:5173, Swagger на http://localhost:5173/api/docs. Публичный хостинг не настроен; инструкция серверного развёртывания находится в DEPLOYMENT.md.
+## Публикация на Vercel — 26 сентября 2026
+
+- Постоянный адрес: [forma-salon-booking.vercel.app](https://forma-salon-booking.vercel.app). Приложение работает независимо от локального компьютера.
+- Vercel Hobby и Neon Free, регион Frankfurt. Обе миграции и demo seed применены к облачной PostgreSQL; секреты хранятся в переменных окружения Vercel.
+- Добавлены 2 теста serverless-обработчика: параллельный холодный запуск и проверка разрешённых origin/CSRF. Всего 31 автоматический тест: 9 unit, 14 integration, 6 Playwright, 2 Vercel.
+- [GitHub Actions для 2852896](https://github.com/arystank1511-blip/forma-salon-booking/actions/runs/36222697760) завершился успешно: сборка, статические проверки, все тесты и Docker Compose с чистой базой.
+- В браузере на облачном preview проверен полный цикл: вход клиента, выбор услуги и мастера, создание записи, отображение в кабинете и отмена созданной тестовой записи. Данные сохраняются в Neon.
+- На постоянном адресе проверены загрузка каталога мастеров, вход администратора и таблица записей, включая отменённую тестовую запись.
+- Исправлена маршрутизация Vercel: именованный rewrite добавлял лишний query-параметр и вызывал HTTP 400 в каталоге мастеров. Используется маршрут с неназванной regex-группой.
+
+Код опубликован в приватном [GitHub-репозитории](https://github.com/arystank1511-blip/forma-salon-booking). Инструкция Vercel находится в [VERCEL.md](VERCEL.md), вариант Docker — в [DEPLOYMENT.md](DEPLOYMENT.md).
