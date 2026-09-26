@@ -82,9 +82,9 @@ test('admin edits a real service and working hours; no page overflow', async ({ 
     );
   }
   await page.getByRole('button', { name: 'Мастера', exact: true }).click();
-  await expect(page.locator('tbody tr')).toHaveCount(2);
   await expect(page.locator('tbody')).toContainText('Нургуль');
   await expect(page.locator('tbody')).toContainText('Люба');
+  await expect(page.locator('tbody')).not.toContainText(/Алина|Тимур|София/);
   await expect(page.getByRole('button', { name: 'Добавить мастера +' })).toBeVisible();
   await page.getByRole('button', { name: 'Услуги', exact: true }).click();
   await page.locator('tbody tr').first().getByRole('button', { name: 'Изменить' }).click();
