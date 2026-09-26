@@ -12,7 +12,7 @@ import { BookingController } from './booking/booking.controller';
 import { AdminController } from './admin/admin.controller';
 import { PublicController } from './public.controller';
 import { Errors } from './errors';
-import { config } from './config';
+import { config, isAllowedOrigin } from './config';
 @Module({
   controllers: [AuthController, BookingController, AdminController, PublicController],
   providers: [Db, SessionGuard, BookingService],
@@ -27,7 +27,7 @@ export async function createApp() {
   app.use((req: Request, res: Response, next: NextFunction) => {
     if (
       !['GET', 'HEAD', 'OPTIONS'].includes(req.method) &&
-      (req.headers.origin !== config.origin || req.headers['x-csrf-protection'] !== '1')
+      (!isAllowedOrigin(req.headers.origin) || req.headers['x-csrf-protection'] !== '1')
     ) {
       res.status(403).json({
         code: 'CSRF_REJECTED',

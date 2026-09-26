@@ -35,7 +35,7 @@ jobs:
       - run: pnpm db:migrate
       - run: pnpm build
       - run: pnpm typecheck && pnpm lint && pnpm exec prettier --check .
-      - run: pnpm test && pnpm test:integration
+      - run: pnpm test && pnpm test:integration && pnpm test:vercel
       - run: pnpm db:seed
       - run: pnpm exec playwright install --with-deps chromium
       - run: |

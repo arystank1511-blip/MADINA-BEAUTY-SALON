@@ -2,6 +2,8 @@
 
 Полноценный MVP онлайн-записи в парикмахерскую: **React + NestJS + PostgreSQL + Prisma**. Русский интерфейс, личный кабинет и административное управление. Главная гарантия: пересекающиеся посещения одного мастера запрещены самой PostgreSQL.
 
+Онлайн-демо: **https://forma-salon-booking.vercel.app**. Vercel обслуживает frontend и API; данные сохраняются в отдельной Neon PostgreSQL. Настройка и обновление описаны в [VERCEL.md](docs/VERCEL.md).
+
 ![Главная страница](docs/screenshots/home-1440.png)
 
 ## Возможности

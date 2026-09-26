@@ -1,5 +1,9 @@
 # Развёртывание
 
+## Vercel
+
+Облачная версия: https://forma-salon-booking.vercel.app. Frontend и API находятся в одном проекте Vercel, PostgreSQL — в Neon, регион Frankfurt. Пошаговая конфигурация: [VERCEL.md](VERCEL.md).
+
 ## Демо на локальной машине
 
 `docker compose up --build -d --wait`, затем `docker compose exec api pnpm db:seed`. Сайт: http://localhost:8080. Это готовый локальный продукт с настоящей PostgreSQL. Публикация репозитория в GitHub сама по себе не публикует работающий сервер.
