@@ -49,7 +49,7 @@ export function App() {
     return () => document.removeEventListener('keydown', close);
   }, [menu]);
   useEffect(() => {
-    if (settings.data) document.title = `${settings.data.name} · Стрижки. Цвет. Ваш характер.`;
+    if (settings.data) document.title = `${settings.data.name} · Салон красоты`;
   }, [settings.data]);
   if (settings.isPending)
     return (
@@ -81,8 +81,7 @@ export function App() {
       <header>
         <div className="header-inner">
           <Link to="/" className="logo" aria-label={`${config.name}, главная`}>
-            {config.name}
-            <span>®</span>
+            <img src="/images/madina-logo-header.svg" alt="" />
           </Link>
           <nav aria-label="Основная навигация" className={menu ? 'open' : ''}>
             <Link to="/services">Услуги</Link>
@@ -151,9 +150,9 @@ export function App() {
       <footer className="container">
         <div>
           <Link className="logo" to="/">
-            {config.name}
+            <img src="/images/madina-logo-header.svg" alt={config.name} />
           </Link>
-          <p>Стрижки. Цвет. Ваш характер.</p>
+          <p>Салон красоты «{config.name}».</p>
         </div>
         <div className="footer-links">
           <Link to="/services">Услуги</Link>
@@ -163,7 +162,11 @@ export function App() {
           </Link>
           <Link to="/my">Личный кабинет</Link>
         </div>
-        <p className="demo-note">Портфолио-проект. Салон, мастера и контакты вымышлены.</p>
+        {config.demo && (
+          <p className="demo-note">
+            Демонстрационный режим. Адрес, контакты, график, услуги и цены уточняйте в салоне.
+          </p>
+        )}
       </footer>
     </>
   );
@@ -175,7 +178,7 @@ function NotFound({ config }: { config: Config }) {
       <div>
         <p className="error-number">404</p>
         <h1>Страница не найдена</h1>
-        <p>Вернёмся туда, где начинается ваша новая форма.</p>
+        <p>Вернёмся на главную салона.</p>
         <ButtonLink to="/">На главную {config.name}</ButtonLink>
       </div>
     </section>

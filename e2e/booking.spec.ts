@@ -17,9 +17,7 @@ test('client books through real API, sees visit and cancels; responsive screensh
   for (const width of widths) {
     await page.setViewportSize({ width, height: 1000 });
     await page.goto('/');
-    await expect(
-      page.getByRole('heading', { name: 'Хорошая форма начинается с вас.' }),
-    ).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Красота начинается с вас.' })).toBeVisible();
     await expect(page.locator('.service-row').first()).toBeVisible();
     await page.screenshot({ path: `docs/screenshots/home-${width}.png`, fullPage: true });
     expect(
@@ -34,7 +32,7 @@ test('client books through real API, sees visit and cancels; responsive screensh
   await expect(page.getByRole('heading', { name: 'Мои записи.' })).toBeVisible();
   await page.getByRole('link', { name: 'Новая запись' }).click();
   await page.getByRole('button', { name: /Мужская стрижка/ }).click();
-  await page.getByRole('button', { name: /Тимур/ }).click();
+  await page.getByRole('button', { name: /Нургуль/ }).click();
   const day = new Date();
   day.setUTCDate(day.getUTCDate() + 5);
   await page.getByLabel('Дата посещения').fill(day.toISOString().slice(0, 10));
@@ -100,7 +98,7 @@ test('admin edits a real service and working hours; no page overflow', async ({ 
 test('guest selection survives login and 404 has working navigation', async ({ page }) => {
   await page.goto('/book');
   await page.getByRole('button', { name: /Мужская стрижка/ }).click();
-  await page.getByRole('button', { name: /Тимур/ }).click();
+  await page.getByRole('button', { name: /Нургуль/ }).click();
   const day = new Date();
   day.setUTCDate(day.getUTCDate() + 6);
   await page.getByLabel('Дата посещения').fill(day.toISOString().slice(0, 10));
@@ -111,7 +109,7 @@ test('guest selection survives login and 404 has working navigation', async ({ p
   await page.getByLabel('Пароль', { exact: true }).fill('FormaDemo2026!');
   await page.getByRole('button', { name: 'Войти', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Подтвердить запись' })).toBeVisible();
-  await expect(page.locator('.review')).toContainText('Тимур');
+  await expect(page.locator('.review')).toContainText('Нургуль');
   await page.goto('/missing-page');
   await expect(page.getByRole('heading', { name: 'Страница не найдена' })).toBeVisible();
   await page.getByRole('link', { name: /На главную/ }).click();
@@ -126,7 +124,7 @@ test('a newly occupied slot resets only the time and refreshes availability', as
   await expect(page.getByRole('heading', { name: 'Мои записи.' })).toBeVisible();
   await page.goto('/book');
   await page.getByRole('button', { name: /Мужская стрижка/ }).click();
-  await page.getByRole('button', { name: /Тимур/ }).click();
+  await page.getByRole('button', { name: /Нургуль/ }).click();
   const date = new Date();
   date.setUTCDate(date.getUTCDate() + 8);
   const day = date.toISOString().slice(0, 10);

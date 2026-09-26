@@ -512,6 +512,11 @@ function Masters() {
               ))}
             </fieldset>
             {mutation.error && <ErrorBox error={mutation.error} />}
+            {!edit && (
+              <p className="caption">
+                После добавления откройте «Расписание» и задайте рабочие часы мастера.
+              </p>
+            )}
             <button className="button" disabled={mutation.isPending}>
               Сохранить
             </button>

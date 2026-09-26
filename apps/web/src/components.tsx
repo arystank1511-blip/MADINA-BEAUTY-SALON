@@ -100,7 +100,7 @@ export function Halftone({ id }: { id: string }) {
     >
       <defs>
         <pattern id={`dots-${id}`} width="7" height="7" patternUnits="userSpaceOnUse">
-          <circle cx="2.5" cy="2.5" r="1.3" fill="#FF4D00" />
+          <circle cx="2.5" cy="2.5" r="1.3" fill="#E60012" />
         </pattern>
         <mask id={`wave-${id}`}>
           <rect width="1400" height="680" fill="black" />

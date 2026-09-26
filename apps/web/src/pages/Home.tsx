@@ -10,11 +10,13 @@ export function Home({ config }: { config: Config }) {
       <section className="hero">
         <Halftone id="hero" />
         <div className="hero-top">
-          <span>ПРОСТРАНСТВО ВАШЕГО СТИЛЯ</span>
-          <span>АЛМАТЫ · ДЕМО-САЛОН</span>
+          <span>САЛОН КРАСОТЫ «МАДИНА»</span>
+          <span>СТИЛЬ НАЧИНАЕТСЯ С ВАС</span>
         </div>
         <div className="hero-body">
-          <h1>{config.name}</h1>
+          <h1 className="hero-logo">
+            <img src="/images/madina-logo-header.svg" alt={config.name} />
+          </h1>
           <h2>
             Стрижки. Цвет.
             <br />
@@ -35,7 +37,7 @@ export function Home({ config }: { config: Config }) {
       </section>
       <Section id="about" label="О САЛОНЕ">
         <h2 className="statement">
-          Хорошая форма
+          Красота
           <br />
           начинается <span>с вас.</span>
         </h2>
@@ -57,7 +59,7 @@ export function Home({ config }: { config: Config }) {
       </Section>
       <Section id="services" label="УСЛУГИ">
         <div className="section-heading">
-          <h2>Найдите свою форму.</h2>
+          <h2>Выберите свой образ.</h2>
           <Link className="text-button" to="/services">
             Все услуги <ArrowUpRight size={18} />
           </Link>
@@ -82,11 +84,13 @@ export function Home({ config }: { config: Config }) {
             {masters.data?.map((m, i) => (
               <article className="master-card" key={m.id}>
                 <div className="portrait">
-                  <img
-                    src={m.avatarUrl || '/images/team.png'}
-                    alt={`Демонстрационный портрет мастера ${m.name}`}
-                    loading="lazy"
-                  />
+                  {m.avatarUrl ? (
+                    <img src={m.avatarUrl} alt={`Мастер ${m.name}`} loading="lazy" />
+                  ) : (
+                    <div className="master-placeholder" aria-hidden="true">
+                      <img src="/images/madina-logo.svg" alt="" loading="lazy" />
+                    </div>
+                  )}
                   <span>0{i + 1}</span>
                 </div>
                 <div className="master-title">
@@ -107,9 +111,7 @@ export function Home({ config }: { config: Config }) {
             ))}
           </div>
         )}
-        <p className="caption">
-          Демонстрационная команда. Фотографии используются как иллюстрации.
-        </p>
+        <p className="caption">Выберите мастера и удобное время для записи.</p>
       </Section>
       <Section id="how" label="КАК ЗАПИСАТЬСЯ">
         <h2>
@@ -150,7 +152,7 @@ export function Home({ config }: { config: Config }) {
           <div>
             <span>КОНТАКТ</span>
             <p>{config.contact}</p>
-            <small>Демонстрационные данные</small>
+            {config.demo && <small>Данные для демонстрации</small>}
           </div>
         </div>
       </Section>
@@ -176,7 +178,7 @@ export function Catalog({ config }: { config: Config }) {
       <h1>
         Ваша следующая
         <br />
-        <span className="muted">любимая форма.</span>
+        <span className="muted">любимая стрижка.</span>
       </h1>
       <p className="page-intro">Прозрачная стоимость. Время только для вас.</p>
       {services.isPending ? (

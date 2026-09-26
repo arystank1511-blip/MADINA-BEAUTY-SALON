@@ -1,6 +1,6 @@
 import 'dotenv/config';
 export const config = {
-  name: process.env.SALON_NAME || 'FORMA',
+  name: process.env.SALON_NAME || 'Мадина',
   currency: process.env.SALON_CURRENCY || 'KZT',
   timezone: process.env.SALON_TIMEZONE || 'Asia/Almaty',
   origin:
@@ -8,8 +8,8 @@ export const config = {
     (process.env.VERCEL === '1' && process.env.VERCEL_URL
       ? `https://${process.env.VERCEL_URL}`
       : 'http://localhost:5173'),
-  address: process.env.SALON_ADDRESS || 'Демонстрационный салон · Алматы',
-  contact: process.env.SALON_CONTACT || 'hello@forma.example',
+  address: process.env.SALON_ADDRESS || 'Адрес салона уточняется',
+  contact: process.env.SALON_CONTACT || 'Контакты салона уточняются',
   hours: process.env.SALON_HOURS || 'Ежедневно · 10:00–19:00',
   demo: process.env.DEMO_MODE === 'true',
   production: process.env.NODE_ENV === 'production',

@@ -64,30 +64,14 @@ async function seed() {
       },
     });
   const masters = [
-    [
-      'Алина',
-      'Стрижки и укладки. Любит естественную текстуру и мягкие формы.',
-      '/images/team.png',
-      [11, 12, 14, 16],
-    ],
-    [
-      'Тимур',
-      'Мужские и детские стрижки. Внимание к форме и каждой детали.',
-      '/images/team.png',
-      [10, 13],
-    ],
-    [
-      'София',
-      'Окрашивание и уход. Создаёт цвет, который подчёркивает вас.',
-      '/images/team.png',
-      [11, 12, 14, 15, 16],
-    ],
+    ['Нургуль', 'Мастер салона «Мадина».', null, [10, 11, 12, 13, 14, 15, 16]],
+    ['Люба', 'Мастер салона «Мадина».', null, [10, 11, 12, 13, 14, 15, 16]],
   ] as const;
   for (const [i, m] of masters.entries()) {
-    if (await db.master.findUnique({ where: { id: id(20 + i) } })) continue;
+    if (await db.master.findUnique({ where: { id: id(23 + i) } })) continue;
     await db.master.create({
       data: {
-        id: id(20 + i),
+        id: id(23 + i),
         name: m[0],
         description: m[1],
         avatarUrl: m[2],
@@ -115,7 +99,7 @@ async function seed() {
     await db.timeOff.create({
       data: {
         id: id(30),
-        masterId: id(22),
+        masterId: id(24),
         startsAt: localInstant(today.add({ days: 7 }).toString(), '10:00', zone),
         endsAt: localInstant(today.add({ days: 7 }).toString(), '19:00', zone),
         reason: 'Демонстрационный выходной',
@@ -135,7 +119,7 @@ async function seed() {
     if (
       await db.appointment.count({
         where: {
-          masterId: id(21),
+          masterId: id(23),
           status: { not: 'CANCELLED' },
           startsAt: { lt: occupiedUntil },
           occupiedUntil: { gt: startsAt },
@@ -147,7 +131,7 @@ async function seed() {
       data: {
         id: id(i),
         customerId: id(2),
-        masterId: id(21),
+        masterId: id(23),
         serviceId: s.id,
         startsAt,
         endsAt,
