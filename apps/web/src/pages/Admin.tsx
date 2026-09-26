@@ -394,6 +394,7 @@ function Masters() {
     services = useServices(true),
     client = useQueryClient();
   const [edit, setEdit] = useState<Master | null | undefined>(undefined);
+  const [showInactive, setShowInactive] = useState(false);
   const mutation = useMutation({
     mutationFn: async ({ body, serviceIds }: { body: unknown; serviceIds: string[] }) => {
       const m = await send<Master>(
@@ -425,15 +426,20 @@ function Masters() {
     <>
       <div className="admin-toolbar">
         <h2>Команда</h2>
-        <button
-          className="button"
-          onClick={() => {
-            mutation.reset();
-            setEdit(null);
-          }}
-        >
-          Добавить мастера +
-        </button>
+        <div className="admin-toolbar-actions">
+          <button className="text-button" onClick={() => setShowInactive(!showInactive)}>
+            {showInactive ? 'Скрыть архивных' : 'Показать архивных'}
+          </button>
+          <button
+            className="button"
+            onClick={() => {
+              mutation.reset();
+              setEdit(null);
+            }}
+          >
+            Добавить мастера +
+          </button>
+        </div>
       </div>
       {query.isPending ? (
         <Loading />
@@ -451,26 +457,28 @@ function Masters() {
               </tr>
             </thead>
             <tbody>
-              {query.data?.map((m) => (
-                <tr key={m.id}>
-                  <td>
-                    {m.name}
-                    <small>{m.description}</small>
-                  </td>
-                  <td>{m.services.map((s) => s.service.name).join(', ')}</td>
-                  <td>{m.isActive ? 'Активен' : 'Неактивен'}</td>
-                  <td>
-                    <button
-                      onClick={() => {
-                        mutation.reset();
-                        setEdit(m);
-                      }}
-                    >
-                      Изменить
-                    </button>
-                  </td>
-                </tr>
-              ))}
+              {query.data
+                ?.filter((m) => showInactive || m.isActive)
+                .map((m) => (
+                  <tr key={m.id}>
+                    <td>
+                      {m.name}
+                      <small>{m.description}</small>
+                    </td>
+                    <td>{m.services.map((s) => s.service.name).join(', ')}</td>
+                    <td>{m.isActive ? 'Активен' : 'Неактивен'}</td>
+                    <td>
+                      <button
+                        onClick={() => {
+                          mutation.reset();
+                          setEdit(m);
+                        }}
+                      >
+                        Изменить
+                      </button>
+                    </td>
+                  </tr>
+                ))}
             </tbody>
           </table>
         </div>
@@ -529,7 +537,7 @@ function Masters() {
 function Schedule({ config }: { config: Config }) {
   const masters = useMasters(true);
   const [masterId, setMasterId] = useState('');
-  const active = masterId || masters.data?.[0]?.id;
+  const active = masterId || masters.data?.find((master) => master.isActive)?.id;
   return (
     <>
       <div className="admin-toolbar">
@@ -537,11 +545,13 @@ function Schedule({ config }: { config: Config }) {
         <label>
           Мастер
           <select value={active || ''} onChange={(e) => setMasterId(e.target.value)}>
-            {masters.data?.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.name}
-              </option>
-            ))}
+            {masters.data
+              ?.filter((m) => m.isActive)
+              .map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name}
+                </option>
+              ))}
           </select>
         </label>
       </div>

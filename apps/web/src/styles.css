@@ -1145,6 +1145,12 @@ td button {
   gap: 20px;
   margin-bottom: 28px;
 }
+.admin-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+}
 .admin-toolbar label {
   min-width: 200px;
   margin: 0;
@@ -1561,6 +1567,10 @@ td button {
   }
   .page {
     padding: 44px 0 64px;
+  }
+  .admin-toolbar {
+    align-items: flex-start;
+    flex-wrap: wrap;
   }
   .page-intro {
     font-size: 15px;
