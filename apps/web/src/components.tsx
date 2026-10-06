@@ -139,9 +139,12 @@ export function Modal({
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     const before = document.activeElement as HTMLElement;
-    ref.current?.showModal();
+    const dialog = ref.current;
+    dialog?.showModal();
     return () => {
-      before?.focus();
+      // Also undo showModal during StrictMode's effect replay before capturing focus again.
+      dialog?.close();
+      if (before?.isConnected) before.focus();
     };
   }, []);
   return (
