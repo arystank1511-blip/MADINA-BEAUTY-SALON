@@ -145,7 +145,15 @@ export function Modal({
     };
   }, []);
   return (
-    <dialog ref={ref} onCancel={onClose} aria-labelledby="dialog-title">
+    <dialog
+      ref={ref}
+      onCancel={(event) => {
+        // Keep React in control: callers may refuse to close while a mutation is pending.
+        event.preventDefault();
+        onClose();
+      }}
+      aria-labelledby="dialog-title"
+    >
       <div className="dialog-top">
         <h2 id="dialog-title">{title}</h2>
         <button className="icon-button" aria-label="Закрыть" onClick={onClose}>
