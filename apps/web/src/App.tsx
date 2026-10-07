@@ -74,7 +74,7 @@ export function App() {
     return () => document.removeEventListener('keydown', close);
   }, [menu]);
   useEffect(() => {
-    if (settings.data) document.title = `${settings.data.name} · Салон красоты`;
+    if (settings.data) document.title = `${settings.data.name} · Парикмахерская в Зеренде`;
   }, [settings.data]);
   if (settings.isPending)
     return (
@@ -169,7 +169,11 @@ export function App() {
           <Link className="logo" to="/">
             <img src="/images/madina-logo-header.svg" alt={config.name} />
           </Link>
-          <p>Салон красоты «{config.name}».</p>
+          <p>
+            Парикмахерская «{config.name}».
+            <br />
+            {config.address}
+          </p>
         </div>
         <div className="footer-links">
           <Link to="/services">Услуги</Link>
@@ -181,11 +185,6 @@ export function App() {
             <WhatsAppIcon size={16} /> {phoneLabel(config.whatsapp)}
           </a>
         </div>
-        {config.demo && (
-          <p className="demo-note">
-            Демонстрационный режим. Адрес, контакты, график, услуги и цены уточняйте в салоне.
-          </p>
-        )}
       </footer>
       {!location.pathname.startsWith('/admin') && <WhatsAppFloat config={config} />}
     </>

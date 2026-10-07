@@ -98,16 +98,6 @@ export function Auth({ config }: { config: Config }) {
             <Arrow />
           </button>
         </form>
-        {config.demo && (
-          <details className="demo-access">
-            <summary>Доступ для знакомства с демо</summary>
-            <p>
-              Администратор: admin@forma.example
-              <br />
-              Пароль: FormaDemo2026!
-            </p>
-          </details>
-        )}
       </div>
     </section>
   );

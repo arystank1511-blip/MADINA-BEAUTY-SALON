@@ -64,7 +64,7 @@ async function seed() {
       },
     });
   const masters = [
-    ['Нургуль', 'Мастер салона «Мадина».', null, [10, 11, 12, 13, 14, 15, 16]],
+    ['Нургуль', 'Мастер салона «Мадина».', '/images/nurgul.webp', [10, 11, 12, 13, 14, 15, 16]],
   ] as const;
   for (const [i, m] of masters.entries()) {
     if (await db.master.findUnique({ where: { id: id(23 + i) } })) continue;
@@ -79,7 +79,7 @@ async function seed() {
           create: Array.from({ length: 7 }, (_, day) => ({
             weekday: day + 1,
             startTime: '10:00',
-            endTime: '19:00',
+            endTime: '18:00',
           })),
         },
         breaks: {
@@ -100,7 +100,7 @@ async function seed() {
         id: id(30),
         masterId: id(23),
         startsAt: localInstant(today.add({ days: 12 }).toString(), '10:00', zone),
-        endsAt: localInstant(today.add({ days: 12 }).toString(), '19:00', zone),
+        endsAt: localInstant(today.add({ days: 12 }).toString(), '18:00', zone),
         reason: 'Демонстрационный выходной',
       },
     });

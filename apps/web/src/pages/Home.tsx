@@ -4,6 +4,7 @@ import {
   CalendarClock,
   Clock,
   MapPin,
+  Wallet,
   Scissors,
   Sparkles,
   UserRound,
@@ -27,8 +28,8 @@ export function Home({ config }: { config: Config }) {
       <section className="hero">
         <Halftone id="hero" />
         <div className="hero-top">
-          <span>САЛОН КРАСОТЫ «МАДИНА»</span>
-          <span>СТИЛЬ НАЧИНАЕТСЯ С ВАС</span>
+          <span>ПАРИКМАХЕРСКАЯ «МАДИНА»</span>
+          <span>С. ЗЕРЕНДА</span>
         </div>
         <div className="hero-body">
           <h1 className="hero-logo">
@@ -74,12 +75,16 @@ export function Home({ config }: { config: Config }) {
           </p>
           <p>От первого разговора до последнего штриха. Внимательно, спокойно и без лишнего.</p>
         </div>
-        <div className="interior">
+        <div className="interior brand-panel">
+          <Halftone id="about" />
           <img
-            src="/images/interior.jpg"
-            alt="Демонстрационная фотография интерьера парикмахерской"
+            src="/images/madina-logo.svg"
+            alt={`Парикмахерская «${config.name}»`}
             loading="lazy"
           />
+          <p className="brand-panel-tags" aria-hidden="true">
+            Стрижки · Окрашивание · Укладка · Уход
+          </p>
           <span>ПРОСТРАНСТВО ДЛЯ ПЕРЕМЕН ↗</span>
         </div>
       </Section>
@@ -179,6 +184,16 @@ export function Home({ config }: { config: Config }) {
             </span>
             <span>АДРЕС</span>
             <p>{config.address}</p>
+            <small>
+              <a
+                className="contact-link"
+                href={config.map}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Открыть в 2ГИС ↗
+              </a>
+            </small>
           </div>
           <div>
             <span className="contact-icon">
@@ -186,7 +201,7 @@ export function Home({ config }: { config: Config }) {
             </span>
             <span>ВРЕМЯ РАБОТЫ</span>
             <p>{config.hours}</p>
-            <small>{config.timezone}</small>
+            <small>Запись с 10:00</small>
           </div>
           <div>
             <span className="contact-icon">
@@ -204,6 +219,14 @@ export function Home({ config }: { config: Config }) {
               </a>
             </p>
             <small>Запись и вопросы — в чате</small>
+          </div>
+          <div>
+            <span className="contact-icon">
+              <Wallet size={20} />
+            </span>
+            <span>ОПЛАТА</span>
+            <p>{config.payment}</p>
+            <small>Оплата в салоне после услуги</small>
           </div>
         </div>
       </Section>

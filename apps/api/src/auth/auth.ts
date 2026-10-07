@@ -20,7 +20,7 @@ import { Role } from '@prisma/client';
 import { Db } from '../db';
 import { config } from '../config';
 import { fail } from '../errors';
-import { LoginDto, RegisterDto } from '../dto';
+import { LoginDto, PasswordDto, RegisterDto } from '../dto';
 const scrypt = promisify(derive);
 export async function hashPassword(password: string): Promise<string> {
   const salt = randomBytes(16).toString('hex');
@@ -143,6 +143,27 @@ export class AuthController {
   @ApiOperation({ summary: 'Текущий пользователь' })
   me(@Req() req: AuthRequest) {
     return req.actor;
+  }
+  @Post('password')
+  @UseGuards(SessionGuard)
+  @ApiCookieAuth()
+  @ApiOperation({ summary: 'Смена пароля; завершает все остальные сессии пользователя' })
+  async password(@Body() body: PasswordDto, @Req() req: AuthRequest) {
+    this.limit(req);
+    const user = await this.db.user.findUniqueOrThrow({ where: { id: req.actor.id } });
+    if (!(await verifyPassword(body.currentPassword, user.passwordHash)))
+      fail(400, 'INVALID_PASSWORD', 'Текущий пароль указан неверно.');
+    if (body.currentPassword === body.newPassword)
+      fail(400, 'SAME_PASSWORD', 'Новый пароль должен отличаться от текущего.');
+    const token = (req.cookies as Record<string, string> | undefined)?.forma_session || '';
+    await this.db.$transaction([
+      this.db.user.update({
+        where: { id: user.id },
+        data: { passwordHash: await hashPassword(body.newPassword) },
+      }),
+      this.db.session.deleteMany({ where: { userId: user.id, NOT: { tokenHash: digest(token) } } }),
+    ]);
+    return { ok: true };
   }
   @Post('logout')
   @ApiOperation({ summary: 'Отзывает текущую сессию' })

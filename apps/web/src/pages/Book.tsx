@@ -176,7 +176,7 @@ export function Book({ config, admin = false }: { config: Config; admin?: boolea
       <p className="caption">
         Все часы указаны по времени салона:
         <br />
-        {config.timezone}. Оплата в салоне.
+        {config.timezone}. Оплата в салоне: {config.payment}.
       </p>
     </>
   );

@@ -33,12 +33,12 @@ services:
       NODE_ENV: ${NODE_ENV:-development}
       DEMO_MODE: ${DEMO_MODE:-true}
       TRUST_PROXY: '1'
-      SALON_NAME: ${SALON_NAME:-FORMA}
+      SALON_NAME: ${SALON_NAME:-Мадина}
       SALON_CURRENCY: ${SALON_CURRENCY:-KZT}
       SALON_TIMEZONE: ${SALON_TIMEZONE:-Asia/Almaty}
-      SALON_ADDRESS: ${SALON_ADDRESS:-Демонстрационный салон · Алматы}
-      SALON_CONTACT: ${SALON_CONTACT:-hello@forma.example}
-      SALON_HOURS: ${SALON_HOURS:-Ежедневно · 10:00–19:00}
+      SALON_ADDRESS: ${SALON_ADDRESS:-с. Зеренда, ул. Тауелсиздик, 68, Акмолинская область}
+      SALON_CONTACT: ${SALON_CONTACT:-WhatsApp +7 776 729 65 58}
+      SALON_HOURS: ${SALON_HOURS:-Ежедневно · 10:00–18:00}
       SALON_WHATSAPP: ${SALON_WHATSAPP:-77767296558}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-5980317055}
