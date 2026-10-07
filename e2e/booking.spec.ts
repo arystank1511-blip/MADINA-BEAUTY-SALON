@@ -1,5 +1,24 @@
-import { expect, test } from '@playwright/test';
+import { expect, Page, test } from '@playwright/test';
 import { mkdir } from 'node:fs/promises';
+const widths = [375, 768, 1440];
+async function login(page: Page) {
+  await page.goto('/login');
+  await page.getByLabel('Email', { exact: true }).fill('admin@forma.example');
+  await page.getByLabel('Пароль', { exact: true }).fill('FormaDemo2026!');
+  await page.getByRole('button', { name: 'Войти', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Рабочее пространство.' })).toBeVisible();
+}
+async function pickSlot(page: Page, daysAhead: number) {
+  // The salon has a single master, so choosing a service goes straight to the calendar.
+  await page.getByRole('button', { name: /Мужская стрижка/ }).click();
+  await expect(page.getByRole('heading', { name: 'Когда вам удобно?' })).toBeVisible();
+  const date = new Date();
+  date.setUTCDate(date.getUTCDate() + daysAhead);
+  const day = date.toISOString().slice(0, 10);
+  await page.getByLabel('Дата посещения').fill(day);
+  await expect(page.locator('.slots button').first()).toBeVisible();
+  return day;
+}
 test('malformed booking URL remains usable', async ({ page }) => {
   await page.goto('/book?date=bad&time=bad&step=2.5');
   await expect(page.getByRole('heading', { name: 'Время для себя.' })).toBeVisible({
@@ -9,9 +28,9 @@ test('malformed booking URL remains usable', async ({ page }) => {
   await page.goto('/login?returnTo=http%3A%2F%2F%5B');
   await expect(page.getByRole('heading', { name: 'С возвращением.' })).toBeVisible();
 });
-const widths = [375, 768, 1440];
-test('client books through real API, sees visit and cancels; responsive screenshots', async ({
+test('guest books through WhatsApp without an account; responsive screenshots', async ({
   page,
+  context,
 }) => {
   await mkdir('docs/screenshots', { recursive: true });
   for (const width of widths) {
@@ -19,24 +38,17 @@ test('client books through real API, sees visit and cancels; responsive screensh
     await page.goto('/');
     await expect(page.getByRole('heading', { name: 'Красота начинается с вас.' })).toBeVisible();
     await expect(page.locator('.service-row').first()).toBeVisible();
+    await expect(page.locator('header')).not.toContainText('Войти');
+    await expect(page.locator('#masters')).toContainText('Нургуль');
+    await expect(page.locator('#masters')).not.toContainText('Люба');
     await page.screenshot({ path: `docs/screenshots/home-${width}.png`, fullPage: true });
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
     ).toBe(true);
   }
   await page.setViewportSize({ width: 1440, height: 1000 });
-  await page.goto('/login');
-  await page.getByLabel('Email', { exact: true }).fill('client@forma.example');
-  await page.getByLabel('Пароль', { exact: true }).fill('FormaDemo2026!');
-  await page.getByRole('button', { name: 'Войти', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Мои записи.' })).toBeVisible();
-  await page.getByRole('link', { name: 'Новая запись' }).click();
-  await page.getByRole('button', { name: /Мужская стрижка/ }).click();
-  await page.getByRole('button', { name: /Нургуль/ }).click();
-  const day = new Date();
-  day.setUTCDate(day.getUTCDate() + 5);
-  await page.getByLabel('Дата посещения').fill(day.toISOString().slice(0, 10));
-  await expect(page.locator('.slots button').first()).toBeVisible();
+  await page.goto('/book');
+  await pickSlot(page, 5);
   for (const width of widths) {
     await page.setViewportSize({ width, height: 1000 });
     await page.screenshot({ path: `docs/screenshots/booking-${width}.png`, fullPage: true });
@@ -46,33 +58,27 @@ test('client books through real API, sees visit and cancels; responsive screensh
   }
   await page.locator('.slots button').first().click();
   await page.getByRole('button', { name: 'Продолжить', exact: true }).click();
-  await page.getByRole('button', { name: 'Подтвердить запись' }).click();
-  await expect(page.getByRole('heading', { name: 'Вы записаны.' })).toBeVisible();
-  await page.locator('main').getByRole('link', { name: 'Мои записи' }).click();
-  for (const width of widths) {
-    await page.setViewportSize({ width, height: 1000 });
-    await page.screenshot({ path: `docs/screenshots/account-${width}.png`, fullPage: true });
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
-      true,
-    );
-  }
-  const card = page
-    .locator('.appointment-card')
-    .filter({ hasText: 'Мужская стрижка' })
-    .filter({ has: page.getByRole('button', { name: 'Отменить' }) })
-    .first();
-  await card.getByRole('button', { name: 'Отменить' }).click();
-  await expect(page.getByRole('dialog')).toBeVisible();
-  await page.getByRole('button', { name: 'Да, отменить' }).click();
-  await expect(page.getByRole('status').filter({ hasText: 'Запись отменена' })).toBeVisible();
+  await page.getByLabel('Ваше имя (необязательно)').fill('Анна');
+  const link = page.getByRole('link', { name: 'Записаться через WhatsApp' });
+  const href = (await link.getAttribute('href')) || '';
+  expect(href.startsWith('https://wa.me/77767296558?text=')).toBe(true);
+  const text = decodeURIComponent(href.split('?text=')[1]);
+  expect(text).toContain('Мужская стрижка');
+  expect(text).toContain('Нургуль');
+  expect(text).toContain('Меня зовут Анна.');
+  // Never leave the test environment for WhatsApp itself.
+  await context.route('https://wa.me/**', (route) => route.fulfill({ body: 'WhatsApp' }));
+  const request = page.waitForRequest('**/api/v1/booking-requests');
+  const popup = page.waitForEvent('popup');
+  await link.click();
+  expect((await request).postDataJSON()).toMatchObject({ name: 'Анна' });
+  await (await popup).close();
+  await expect(page.getByRole('heading', { name: 'Отправьте сообщение.' })).toBeVisible();
 });
-test('admin edits a real service and working hours; no page overflow', async ({ page }) => {
-  await page.goto('/login');
-  await page.getByLabel('Email', { exact: true }).fill('admin@forma.example');
-  await page.getByLabel('Пароль', { exact: true }).fill('FormaDemo2026!');
-  await page.getByRole('button', { name: 'Войти', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Мои записи.' })).toBeVisible();
-  await page.goto('/admin');
+test('admin changes a service price inline and edits working hours; no page overflow', async ({
+  page,
+}) => {
+  await login(page);
   await expect(page.locator('table')).toBeVisible();
   for (const width of widths) {
     await page.setViewportSize({ width, height: 1000 });
@@ -81,69 +87,63 @@ test('admin edits a real service and working hours; no page overflow', async ({ 
       true,
     );
   }
+  await page.setViewportSize({ width: 1440, height: 1000 });
   await page.getByRole('button', { name: 'Мастера', exact: true }).click();
   await expect(page.locator('tbody')).toContainText('Нургуль');
-  await expect(page.locator('tbody')).toContainText('Люба');
-  await expect(page.locator('tbody')).not.toContainText(/Алина|Тимур|София/);
-  await expect(page.getByRole('button', { name: 'Добавить мастера +' })).toBeVisible();
+  await expect(page.locator('tbody')).not.toContainText(/Люба|Алина|Тимур|София/);
   await page.getByRole('button', { name: 'Услуги', exact: true }).click();
-  await page.locator('tbody tr').first().getByRole('button', { name: 'Изменить' }).click();
-  await page.getByLabel('Цена (KZT)').fill('6100');
-  await page.getByRole('button', { name: 'Сохранить', exact: true }).click();
-  await expect(page.getByRole('dialog')).not.toBeVisible();
-  await expect(page.locator('tbody tr').first()).toContainText('6 100');
-  await page.locator('tbody tr').first().getByRole('button', { name: 'Изменить' }).click();
-  await page.getByLabel('Цена (KZT)').fill('6000');
-  await page.getByRole('button', { name: 'Сохранить', exact: true }).click();
-  await expect(page.getByRole('dialog')).not.toBeVisible();
+  const row = page.locator('tbody tr').first();
+  const price = row.getByRole('spinbutton');
+  const original = await price.inputValue();
+  await price.fill('6100');
+  await row.getByRole('button', { name: /Сохранить цену/ }).click();
+  await expect(row.getByRole('status')).toContainText('Цена обновлена');
+  await page.goto('/services');
+  await expect(page.locator('.service-row').first()).toContainText('6 100');
+  await page.goto('/admin');
+  await page.getByRole('button', { name: 'Услуги', exact: true }).click();
+  await page.locator('tbody tr').first().getByRole('spinbutton').fill(original);
+  await page
+    .locator('tbody tr')
+    .first()
+    .getByRole('button', { name: /Сохранить цену/ })
+    .click();
+  await expect(page.locator('tbody tr').first().getByRole('status')).toBeVisible();
   await page.getByRole('button', { name: 'Расписание', exact: true }).click();
   await page.getByRole('button', { name: 'Сохранить часы' }).click();
   await expect(page.getByRole('status')).toContainText('Расписание сохранено');
 });
-test('guest selection survives login and 404 has working navigation', async ({ page }) => {
-  await page.goto('/book');
-  await page.getByRole('button', { name: /Мужская стрижка/ }).click();
-  await page.getByRole('button', { name: /Нургуль/ }).click();
-  const day = new Date();
-  day.setUTCDate(day.getUTCDate() + 6);
-  await page.getByLabel('Дата посещения').fill(day.toISOString().slice(0, 10));
-  await page.locator('.slots button').first().click();
-  await page.getByRole('button', { name: 'Продолжить', exact: true }).click();
-  await page.getByRole('link', { name: 'Войти и продолжить' }).click();
-  await page.getByLabel('Email', { exact: true }).fill('anna@forma.example');
-  await page.getByLabel('Пароль', { exact: true }).fill('FormaDemo2026!');
-  await page.getByRole('button', { name: 'Войти', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Подтвердить запись' })).toBeVisible();
-  await expect(page.locator('.review')).toContainText('Нургуль');
+test('former account pages redirect to booking and 404 has working navigation', async ({
+  page,
+}) => {
+  await page.goto('/my');
+  await expect(page.getByRole('heading', { name: 'Время для себя.' })).toBeVisible();
+  await page.goto('/register');
+  await expect(page.getByRole('heading', { name: 'Время для себя.' })).toBeVisible();
   await page.goto('/missing-page');
   await expect(page.getByRole('heading', { name: 'Страница не найдена' })).toBeVisible();
   await page.getByRole('link', { name: /На главную/ }).click();
   await expect(page.locator('.hero h1')).toBeVisible();
 });
 
-test('a newly occupied slot resets only the time and refreshes availability', async ({ page }) => {
-  await page.goto('/login');
-  await page.getByLabel('Email', { exact: true }).fill('anna@forma.example');
-  await page.getByLabel('Пароль', { exact: true }).fill('FormaDemo2026!');
-  await page.getByRole('button', { name: 'Войти', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Мои записи.' })).toBeVisible();
-  await page.goto('/book');
-  await page.getByRole('button', { name: /Мужская стрижка/ }).click();
-  await page.getByRole('button', { name: /Нургуль/ }).click();
-  const date = new Date();
-  date.setUTCDate(date.getUTCDate() + 8);
-  const day = date.toISOString().slice(0, 10);
-  await page.getByLabel('Дата посещения').fill(day);
+test('admin booking: a newly occupied slot resets only the time', async ({ page }) => {
+  await login(page);
+  await page.goto('/admin/new');
+  const day = await pickSlot(page, 8);
   await page.locator('.slots button').first().click();
   await page.getByRole('button', { name: 'Продолжить', exact: true }).click();
+  const customer = page.getByLabel('Клиент');
+  await expect(customer.locator('option')).not.toHaveCount(1);
+  await customer.selectOption({ index: 1 });
   const selected = new URL(page.url()).searchParams;
   const headers = { Origin: new URL(page.url()).origin, 'X-CSRF-Protection': '1' };
-  const competing = await page.request.post('/api/v1/appointments', {
+  const competing = await page.request.post('/api/v1/admin/appointments', {
     headers,
     data: {
       serviceId: selected.get('service'),
       masterId: selected.get('master'),
       startsAt: selected.get('time'),
+      customerId: await customer.inputValue(),
     },
   });
   expect(competing.status()).toBe(201);
@@ -159,7 +159,7 @@ test('a newly occupied slot resets only the time and refreshes availability', as
     expect(after.has('time')).toBe(false);
     await expect(page.locator('.slots button[aria-pressed=true]')).toHaveCount(0);
   } finally {
-    await page.request.patch(`/api/v1/appointments/${id}/cancel`, { headers, data: {} });
+    await page.request.patch(`/api/v1/admin/appointments/${id}/cancel`, { headers, data: {} });
   }
 });
 
@@ -185,5 +185,5 @@ test('mobile menu supports Escape; booking reflows at 200 percent', async ({ pag
     true,
   );
   await page.getByRole('button', { name: /Мужская стрижка/ }).click();
-  await expect(page.getByRole('heading', { name: 'Выберите мастера' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Когда вам удобно?' })).toBeVisible();
 });

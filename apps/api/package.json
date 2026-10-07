@@ -6,7 +6,7 @@
     "dev": "tsc && node --watch dist/src/main.js",
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run test/availability.test.ts",
+    "test": "vitest run test/availability.test.ts test/telegram.test.ts",
     "test:integration": "vitest run test/integration.test.ts --no-file-parallelism",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate deploy",

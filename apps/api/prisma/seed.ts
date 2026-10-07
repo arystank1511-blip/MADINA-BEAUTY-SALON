@@ -65,7 +65,6 @@ async function seed() {
     });
   const masters = [
     ['Нургуль', 'Мастер салона «Мадина».', null, [10, 11, 12, 13, 14, 15, 16]],
-    ['Люба', 'Мастер салона «Мадина».', null, [10, 11, 12, 13, 14, 15, 16]],
   ] as const;
   for (const [i, m] of masters.entries()) {
     if (await db.master.findUnique({ where: { id: id(23 + i) } })) continue;
@@ -99,9 +98,9 @@ async function seed() {
     await db.timeOff.create({
       data: {
         id: id(30),
-        masterId: id(24),
-        startsAt: localInstant(today.add({ days: 7 }).toString(), '10:00', zone),
-        endsAt: localInstant(today.add({ days: 7 }).toString(), '19:00', zone),
+        masterId: id(23),
+        startsAt: localInstant(today.add({ days: 12 }).toString(), '10:00', zone),
+        endsAt: localInstant(today.add({ days: 12 }).toString(), '19:00', zone),
         reason: 'Демонстрационный выходной',
       },
     });

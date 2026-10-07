@@ -37,11 +37,16 @@ test('Escape respects an in-flight cancellation, then closes and restores focus'
           address: '',
           contact: '',
           hours: '',
+          whatsapp: '77767296558',
           demo: false,
         },
       });
-    if (path.endsWith('/auth/me')) return route.fulfill({ json: appointment.customer });
-    if (path.endsWith('/appointments/my'))
+    if (path.endsWith('/auth/me'))
+      return route.fulfill({
+        json: { id: 'admin', name: 'Админ', email: 'admin@example.com', role: 'ADMIN' },
+      });
+    if (path.endsWith('/admin/masters')) return route.fulfill({ json: [] });
+    if (path.endsWith('/admin/appointments'))
       return route.fulfill({ json: { items: [appointment], total: 1, page: 1, pageSize: 20 } });
     if (path.endsWith('/cancel')) {
       await pending;
@@ -52,14 +57,14 @@ test('Escape respects an in-flight cancellation, then closes and restores focus'
     }
     return route.fulfill({ status: 404, json: {} });
   });
-  await page.goto('/my');
+  await page.goto('/admin');
   const opener = page.getByRole('button', { name: 'Отменить', exact: true });
   await opener.click();
   const dialog = page.getByRole('dialog');
   await expect(dialog).toBeVisible();
   try {
-    await page.getByRole('button', { name: 'Да, отменить' }).click();
-    await expect(page.getByRole('button', { name: 'Отменяем…' })).toBeDisabled();
+    await dialog.getByRole('button', { name: 'Подтвердить' }).click();
+    await expect(dialog.getByRole('button', { name: 'Подтвердить' })).toBeDisabled();
     await page.keyboard.press('Escape');
     await expect(dialog).toBeVisible();
     await page.getByRole('button', { name: 'Закрыть', exact: true }).click();
@@ -74,7 +79,7 @@ test('Escape respects an in-flight cancellation, then closes and restores focus'
   await opener.click();
   await expect(dialog).toBeVisible();
   await expect(dialog.getByRole('alert')).toHaveCount(0);
-  await page.getByRole('button', { name: 'Оставить запись' }).click();
+  await dialog.getByRole('button', { name: 'Назад' }).click();
   await expect(dialog).not.toBeVisible();
   await expect(opener).toBeFocused();
 });

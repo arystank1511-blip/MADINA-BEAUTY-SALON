@@ -6,6 +6,7 @@ export interface Config {
   address: string;
   contact: string;
   hours: string;
+  whatsapp: string;
   demo: boolean;
 }
 export interface User {
@@ -206,3 +207,9 @@ export const addDays = (value: string, n: number) => {
   d.setUTCDate(d.getUTCDate() + n);
   return d.toISOString().slice(0, 10);
 };
+export const whatsappLink = (config: Config, text?: string) =>
+  `https://wa.me/${config.whatsapp}` + (text ? `?text=${encodeURIComponent(text)}` : '');
+export const phoneLabel = (digits: string) =>
+  digits.length === 11
+    ? `+${digits[0]} ${digits.slice(1, 4)} ${digits.slice(4, 7)} ${digits.slice(7, 9)} ${digits.slice(9)}`
+    : `+${digits}`;
