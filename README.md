@@ -6,7 +6,7 @@
 
 Онлайн-запись для салона «Мадина»: **React + NestJS + PostgreSQL + Prisma**. Русский интерфейс, запись гостей через WhatsApp, уведомления в Telegram и административное управление. Пересекающиеся посещения одного мастера запрещены самой PostgreSQL.
 
-Онлайн-демо: **https://forma-salon-booking.vercel.app**. Vercel обслуживает frontend и API; данные сохраняются в отдельной Neon PostgreSQL. Настройка и обновление описаны в [VERCEL.md](docs/VERCEL.md).
+Онлайн-демо: **https://forma-salon-booking.vercel.app**. Vercel-проект называется **madina_beauty** (бывший forma-salon-booking); он обслуживает frontend и API; данные сохраняются в отдельной Neon PostgreSQL. Настройка и обновление описаны в [VERCEL.md](docs/VERCEL.md).
 
 ![Главная страница](docs/screenshots/home-1440.png)
 
@@ -87,7 +87,7 @@ Seed разрешён только при `DEMO_MODE=true` и `NODE_ENV!=product
 
 1. В Telegram напишите [@BotFather](https://t.me/BotFather) команду `/newbot` и получите токен бота.
 2. Откройте своего бота и нажмите «Start» — без этого Telegram не разрешит боту писать вам.
-3. В Vercel (Settings → Environment Variables) добавьте `TELEGRAM_BOT_TOKEN` и сделайте Redeploy.
+3. В Vercel-проекте **madina_beauty** (Settings → Environment Variables) добавьте `TELEGRAM_BOT_TOKEN` и сделайте Redeploy. Имя переменной должно быть именно таким.
 
 ID чата владельца `5980317055` прописан по умолчанию. Другого получателя (или несколько через запятую) можно задать переменной `TELEGRAM_CHAT_ID`.
 
