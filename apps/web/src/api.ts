@@ -84,27 +84,65 @@ export class ApiError extends Error {
   }
 }
 export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const headers = new Headers({
+    'Content-Type': 'application/json',
+    'X-CSRF-Protection': '1',
+  });
+  new Headers(options.headers).forEach((value, name) => headers.set(name, value));
   let response: Response;
   try {
     response = await fetch('/api/v1' + path, {
       ...options,
       credentials: 'same-origin',
-      headers: { 'Content-Type': 'application/json', 'X-CSRF-Protection': '1', ...options.headers },
+      headers,
     });
-  } catch {
+  } catch (error) {
+    if (options.signal?.aborted || (error instanceof Error && error.name === 'AbortError'))
+      throw error;
     throw new ApiError(0, 'NETWORK', 'Не удалось подключиться. Проверьте соединение и повторите.');
   }
-  const body = await response.json();
-  if (!response.ok)
+  if (response.status === 204) return undefined as T;
+  let body: unknown;
+  try {
+    body = await response.json();
+  } catch (error) {
+    if (options.signal?.aborted || (error instanceof Error && error.name === 'AbortError'))
+      throw error;
+    if (response.ok)
+      throw new ApiError(
+        response.status,
+        'INVALID_RESPONSE',
+        'Сервер вернул некорректный ответ. Попробуйте ещё раз.',
+      );
+    // Proxies can return HTML or an empty body. Preserve their HTTP status (especially 401).
+  }
+  if (!response.ok) {
+    const data = isRecord(body) ? body : {};
     throw new ApiError(
       response.status,
-      body.code,
-      Array.isArray(body.message)
+      typeof data.code === 'string' ? data.code : 'HTTP_ERROR',
+      Array.isArray(data.message)
         ? 'Проверьте заполнение полей.'
-        : body.message || 'Не удалось выполнить действие.',
-      body.conflicts,
+        : typeof data.message === 'string' && data.message
+          ? data.message
+          : 'Не удалось выполнить действие. Попробуйте ещё раз.',
+      Array.isArray(data.conflicts) ? data.conflicts.filter(isConflict) : [],
     );
+  }
   return body as T;
+}
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+function isConflict(value: unknown): value is ApiError['conflicts'][number] {
+  return (
+    isRecord(value) &&
+    typeof value.id === 'string' &&
+    typeof value.startsAt === 'string' &&
+    typeof value.serviceName === 'string' &&
+    isRecord(value.customer) &&
+    typeof value.customer.name === 'string'
+  );
 }
 export const send = <T>(path: string, method: string, body: unknown = {}) =>
   api<T>(path, { method, body: JSON.stringify(body) });

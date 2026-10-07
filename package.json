@@ -12,7 +12,7 @@
     "typecheck": "pnpm -r typecheck",
     "lint": "eslint apps --max-warnings 0",
     "format": "prettier --write .",
-    "test": "pnpm --filter @forma/api test",
+    "test": "pnpm -r test",
     "test:integration": "pnpm --filter @forma/api test:integration",
     "test:e2e": "playwright test",
     "test:vercel": "node --test test/vercel.test.cjs",
@@ -27,5 +27,9 @@
     "prettier": "3.7.4",
     "concurrently": "9.2.1",
     "@playwright/test": "1.58.2"
+  },
+  "author": {
+    "name": "Arystan Kabdesh",
+    "url": "https://github.com/arystank1511-blip"
   }
 }
