@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Check, ChevronLeft } from 'lucide-react';
 import {
@@ -17,19 +17,19 @@ import {
   todayIn,
   User,
   useMasters,
-  useMe,
   useServices,
 } from '../api';
-import { Arrow, ButtonLink, ErrorBox, Loading } from '../components';
+import { Arrow, ButtonLink, ErrorBox, Loading, WhatsAppIcon, WhatsAppLink } from '../components';
 export function Book({ config, admin = false }: { config: Config; admin?: boolean }) {
   const [params, setParams] = useSearchParams(),
     services = useServices(),
     masters = useMasters(),
-    me = useMe(),
     client = useQueryClient();
   const [error, setError] = useState<unknown>(null),
     [success, setSuccess] = useState<Appointment | null>(null),
-    [customer, setCustomer] = useState('');
+    [customer, setCustomer] = useState(''),
+    [guestName, setGuestName] = useState(''),
+    [sent, setSent] = useState(false);
   const [customerPage, setCustomerPage] = useState(1);
   const serviceId = params.get('service') || '',
     masterId = params.get('master') || '',
@@ -128,6 +128,25 @@ export function Book({ config, admin = false }: { config: Config; admin?: boolea
         void client.invalidateQueries({ queryKey: ['me'] });
     },
   });
+  const whatsappText = [
+    `Здравствуйте! Хочу записаться в салон «${config.name}».`,
+    service && `Услуга: ${service.name} (${money(service.priceMinor, config.currency)})`,
+    master && `Мастер: ${master.name}`,
+    time && `Время: ${dateLabel(time, config.timezone)}, ${timeLabel(time, config.timezone)}`,
+    guestName.trim() && `Меня зовут ${guestName.trim()}.`,
+  ]
+    .filter(Boolean)
+    .join('\n');
+  function notifySalon() {
+    setSent(true);
+    // Telegram notification is best effort: WhatsApp opens even if it fails.
+    void send('/booking-requests', 'POST', {
+      serviceId,
+      ...(masterId ? { masterId } : {}),
+      ...(time ? { startsAt: time } : {}),
+      ...(guestName.trim() ? { name: guestName.trim() } : {}),
+    }).catch(() => undefined);
+  }
   const summary = (
     <>
       <p className="eyebrow">ВАША ЗАПИСЬ</p>
@@ -161,6 +180,31 @@ export function Book({ config, admin = false }: { config: Config; admin?: boolea
       </p>
     </>
   );
+  if (sent && !admin)
+    return (
+      <section className="page success-page">
+        <span className="success-icon whatsapp-success">
+          <WhatsAppIcon size={34} />
+        </span>
+        <p className="eyebrow">ПОЧТИ ГОТОВО</p>
+        <h1>Отправьте сообщение.</h1>
+        <p className="page-intro">
+          Мы открыли WhatsApp с готовым текстом заявки. Отправьте его — мастер подтвердит время в
+          ответ.
+          <br />
+          {service?.name}
+          {time && ` · ${dateLabel(time, config.timezone)}, ${timeLabel(time, config.timezone)}`}
+        </p>
+        <div className="form-actions">
+          <WhatsAppLink config={config} text={whatsappText}>
+            Открыть WhatsApp ещё раз
+          </WhatsAppLink>
+          <ButtonLink to="/" secondary>
+            На главную
+          </ButtonLink>
+        </div>
+      </section>
+    );
   if (success)
     return (
       <section className="page success-page">
@@ -177,7 +221,7 @@ export function Book({ config, admin = false }: { config: Config; admin?: boolea
           <br />
           {money(success.priceMinor, config.currency)}
         </p>
-        <ButtonLink to={admin ? '/admin' : '/my'}>{admin ? 'Все записи' : 'Мои записи'}</ButtonLink>
+        <ButtonLink to="/admin">Все записи</ButtonLink>
       </section>
     );
   return (
@@ -239,11 +283,16 @@ export function Book({ config, admin = false }: { config: Config; admin?: boolea
                       key={s.id}
                       onClick={() => {
                         setError(null);
+                        // With a single master for this service the choice is obvious: skip it.
+                        const only = masters.data?.filter((m) =>
+                          m.services.some((ms) => ms.serviceId === s.id),
+                        );
+                        const preset = pinned || (only?.length === 1 ? only[0].id : undefined);
                         change({
                           service: s.id,
-                          master: pinned || undefined,
+                          master: preset,
                           time: undefined,
-                          step: pinned ? '3' : '2',
+                          step: preset ? '3' : '2',
                         });
                       }}
                     >
@@ -395,31 +444,33 @@ export function Book({ config, admin = false }: { config: Config; admin?: boolea
                   {customers.error && <ErrorBox error={customers.error} />}
                 </>
               )}
-              {!me.data ? (
-                <div className="login-prompt">
-                  <h3>Осталось войти</h3>
-                  <p>Сохраним выбранные детали, пока вы входите в аккаунт.</p>
-                  <ButtonLink
-                    to={'/login?returnTo=' + encodeURIComponent('/book?' + params.toString())}
-                  >
-                    Войти и продолжить
-                  </ButtonLink>
-                  <Link
-                    to={'/register?returnTo=' + encodeURIComponent('/book?' + params.toString())}
-                  >
-                    Создать аккаунт
-                  </Link>
+              {!admin ? (
+                <div className="login-prompt whatsapp-prompt">
+                  <h3>Подтвердим в WhatsApp</h3>
+                  <p>
+                    Нажмите кнопку — откроется чат салона с готовым сообщением. Регистрация не
+                    нужна.
+                  </p>
+                  <label>
+                    Ваше имя (необязательно)
+                    <input
+                      autoComplete="given-name"
+                      maxLength={80}
+                      value={guestName}
+                      onChange={(e) => setGuestName(e.target.value)}
+                    />
+                  </label>
+                  <WhatsAppLink config={config} text={whatsappText} onClick={notifySalon}>
+                    Записаться через WhatsApp
+                  </WhatsAppLink>
                 </div>
               ) : (
                 <>
                   <p className="caption">
                     Запись на имя{' '}
-                    {admin
-                      ? customers.data?.items.find((c) => c.id === customer)?.name ||
-                        'выбранного клиента'
-                      : me.data.name}
-                    .<br />
-                    До начала посещения можно отменить запись в личном кабинете.
+                    {customers.data?.items.find((c) => c.id === customer)?.name ||
+                      'выбранного клиента'}
+                    .
                   </p>
                   <button
                     className="button"

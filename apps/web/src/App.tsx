@@ -2,12 +2,19 @@ import { lazy, Suspense, useEffect, useState } from 'react';
 import { Link, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { Menu, X } from 'lucide-react';
-import { Config, send, useConfig, useMe } from './api';
-import { Arrow, ButtonLink, ErrorBox, Halftone, Loading } from './components';
+import { Config, phoneLabel, send, useConfig, useMe } from './api';
+import {
+  Arrow,
+  ButtonLink,
+  ErrorBox,
+  Halftone,
+  Loading,
+  WhatsAppFloat,
+  WhatsAppIcon,
+} from './components';
 import { Home, Catalog } from './pages/Home';
 import { Auth } from './pages/Auth';
 import { Book } from './pages/Book';
-import { MyAppointments } from './pages/MyAppointments';
 const Admin = lazy(() => import('./pages/Admin').then((m) => ({ default: m.Admin })));
 function Gate({ children, admin = false }: { children: React.ReactNode; admin?: boolean }) {
   const me = useMe();
@@ -21,7 +28,7 @@ function Gate({ children, admin = false }: { children: React.ReactNode; admin?: 
         replace
       />
     );
-  if (admin && me.data.role !== 'ADMIN') return <Navigate to="/my" replace />;
+  if (admin && me.data.role !== 'ADMIN') return <Navigate to="/" replace />;
   return children;
 }
 export function App() {
@@ -37,6 +44,24 @@ export function App() {
       setTimeout(() => document.getElementById(location.hash.slice(1))?.scrollIntoView(), 100);
     } else window.scrollTo(0, 0);
   }, [location.pathname, location.hash]);
+  useEffect(() => {
+    const items = document.querySelectorAll<HTMLElement>('.reveal:not(.visible)');
+    if (!('IntersectionObserver' in window)) {
+      items.forEach((el) => el.classList.add('visible'));
+      return;
+    }
+    const observer = new IntersectionObserver(
+      (entries) =>
+        entries.forEach((entry) => {
+          if (!entry.isIntersecting) return;
+          entry.target.classList.add('visible');
+          observer.unobserve(entry.target);
+        }),
+      { rootMargin: '0px 0px -8% 0px', threshold: 0.05 },
+    );
+    items.forEach((el) => observer.observe(el));
+    return () => observer.disconnect();
+  }, [location.pathname, settings.data]);
   useEffect(() => {
     if (!menu) return;
     const close = (event: KeyboardEvent) => {
@@ -85,11 +110,10 @@ export function App() {
           </Link>
           <nav aria-label="Основная навигация" className={menu ? 'open' : ''}>
             <Link to="/services">Услуги</Link>
-            <Link to="/#masters">Мастера</Link>
+            <Link to="/#masters">Мастер</Link>
             <Link to="/#about">О салоне</Link>
             <Link to="/#contacts">Контакты</Link>
             {me.data?.role === 'ADMIN' && <Link to="/admin">Управление</Link>}
-            <Link to={me.data ? '/my' : '/login'}>{me.data ? 'Мои записи' : 'Войти'}</Link>
             {me.data && (
               <button className="nav-logout" onClick={() => void logout()}>
                 Выйти
@@ -117,15 +141,8 @@ export function App() {
           <Route path="/services" element={<Catalog config={config} />} />
           <Route path="/book" element={<Book config={config} />} />
           <Route path="/login" element={<Auth config={config} />} />
-          <Route path="/register" element={<Auth config={config} register />} />
-          <Route
-            path="/my"
-            element={
-              <Gate>
-                <MyAppointments config={config} />
-              </Gate>
-            }
-          />
+          <Route path="/register" element={<Navigate to="/book" replace />} />
+          <Route path="/my" element={<Navigate to="/book" replace />} />
           <Route
             path="/admin"
             element={
@@ -156,11 +173,13 @@ export function App() {
         </div>
         <div className="footer-links">
           <Link to="/services">Услуги</Link>
-          <Link to="/#masters">Мастера</Link>
+          <Link to="/#masters">Мастер</Link>
           <Link to="/book">
             Записаться <Arrow />
           </Link>
-          <Link to="/my">Личный кабинет</Link>
+          <a href={`https://wa.me/${config.whatsapp}`} target="_blank" rel="noopener noreferrer">
+            <WhatsAppIcon size={16} /> {phoneLabel(config.whatsapp)}
+          </a>
         </div>
         {config.demo && (
           <p className="demo-note">
@@ -168,6 +187,7 @@ export function App() {
           </p>
         )}
       </footer>
+      {!location.pathname.startsWith('/admin') && <WhatsAppFloat config={config} />}
     </>
   );
 }

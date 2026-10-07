@@ -1,7 +1,24 @@
 import { Link } from 'react-router-dom';
-import { ArrowUpRight } from 'lucide-react';
-import { Config, useMasters, useServices } from '../api';
-import { ButtonLink, ErrorBox, Halftone, Loading, Section, ServiceRows } from '../components';
+import {
+  ArrowUpRight,
+  CalendarClock,
+  Clock,
+  MapPin,
+  Scissors,
+  Sparkles,
+  UserRound,
+} from 'lucide-react';
+import { Config, phoneLabel, useMasters, useServices } from '../api';
+import {
+  ButtonLink,
+  ErrorBox,
+  Halftone,
+  Loading,
+  Section,
+  ServiceRows,
+  WhatsAppIcon,
+  WhatsAppLink,
+} from '../components';
 export function Home({ config }: { config: Config }) {
   const services = useServices(),
     masters = useMasters();
@@ -23,15 +40,24 @@ export function Home({ config }: { config: Config }) {
             Ваш характер.
           </h2>
           <p>
-            Выберите услугу, мастера
-            <br className="mobile-break" /> и удобное время онлайн.
+            Выберите услугу и удобное время,
+            <br className="mobile-break" /> а подтвердим в WhatsApp.
           </p>
-          <ButtonLink to="/book">Записаться</ButtonLink>
+          <div className="hero-actions">
+            <ButtonLink to="/book">Записаться</ButtonLink>
+            <WhatsAppLink
+              config={config}
+              className="button ghost"
+              text={`Здравствуйте! Хочу записаться в салон «${config.name}».`}
+            >
+              WhatsApp
+            </WhatsAppLink>
+          </div>
         </div>
         <div className="hero-bottom">
           <span>ВАША ИНДИВИДУАЛЬНОСТЬ. НАША РАБОТА.</span>
           <a href="#about" aria-label="Подробнее о салоне">
-            Листайте вниз <span>↓</span>
+            Листайте вниз <span className="scroll-cue">↓</span>
           </a>
         </div>
       </section>
@@ -72,15 +98,15 @@ export function Home({ config }: { config: Config }) {
           <ServiceRows services={services.data || []} config={config} />
         )}
       </Section>
-      <Section id="masters" label="МАСТЕРА">
+      <Section id="masters" label="МАСТЕР">
         <h2>В хороших руках.</h2>
-        <p className="section-intro">Разный почерк. Общее внимание к деталям.</p>
+        <p className="section-intro">Внимание к деталям в каждой работе.</p>
         {masters.isPending ? (
           <Loading />
         ) : masters.error ? (
           <ErrorBox error={masters.error} retry={() => void masters.refetch()} />
         ) : (
-          <div className="master-grid">
+          <div className={`master-grid ${masters.data?.length === 1 ? 'single' : ''}`}>
             {masters.data?.map((m, i) => (
               <article className="master-card" key={m.id}>
                 <div className="portrait">
@@ -111,7 +137,7 @@ export function Home({ config }: { config: Config }) {
             ))}
           </div>
         )}
-        <p className="caption">Выберите мастера и удобное время для записи.</p>
+        <p className="caption">Выберите услугу и удобное время для записи.</p>
       </Section>
       <Section id="how" label="КАК ЗАПИСАТЬСЯ">
         <h2>
@@ -120,14 +146,21 @@ export function Home({ config }: { config: Config }) {
           Всего четыре шага.
         </h2>
         <div className="steps-grid">
-          {[
-            ['Услуга', 'Выберите то, что нужно вашим волосам.'],
-            ['Мастер', 'Найдите специалиста под свою задачу.'],
-            ['Дата и время', 'Выберите удобное окно в расписании.'],
-            ['Подтверждение', 'Проверьте детали. Будем ждать вас.'],
-          ].map(([title, text], i) => (
+          {(
+            [
+              [Scissors, 'Услуга', 'Выберите то, что нужно вашим волосам.'],
+              [UserRound, 'Мастер', 'Опытный мастер позаботится о вашем образе.'],
+              [CalendarClock, 'Дата и время', 'Выберите удобное окно в расписании.'],
+              [WhatsAppIcon, 'WhatsApp', 'Отправьте заявку — подтвердим время в чате.'],
+            ] as const
+          ).map(([Icon, title, text], i) => (
             <div key={title}>
-              <span>0{i + 1}</span>
+              <span className="step-top">
+                0{i + 1}
+                <span className="step-icon">
+                  <Icon size={22} />
+                </span>
+              </span>
               <h3>{title}</h3>
               <p>{text}</p>
             </div>
@@ -141,25 +174,45 @@ export function Home({ config }: { config: Config }) {
         </h2>
         <div className="contact-grid">
           <div>
+            <span className="contact-icon">
+              <MapPin size={20} />
+            </span>
             <span>АДРЕС</span>
             <p>{config.address}</p>
           </div>
           <div>
+            <span className="contact-icon">
+              <Clock size={20} />
+            </span>
             <span>ВРЕМЯ РАБОТЫ</span>
             <p>{config.hours}</p>
             <small>{config.timezone}</small>
           </div>
           <div>
-            <span>КОНТАКТ</span>
-            <p>{config.contact}</p>
-            {config.demo && <small>Данные для демонстрации</small>}
+            <span className="contact-icon">
+              <WhatsAppIcon size={20} />
+            </span>
+            <span>WHATSAPP</span>
+            <p>
+              <a
+                className="contact-link"
+                href={`https://wa.me/${config.whatsapp}`}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {phoneLabel(config.whatsapp)}
+              </a>
+            </p>
+            <small>Запись и вопросы — в чате</small>
           </div>
         </div>
       </Section>
       <section className="closing">
         <Halftone id="closing" />
         <div>
-          <p>НАЧНЁМ С ВАШЕГО ЖЕЛАНИЯ</p>
+          <p>
+            <Sparkles size={14} className="sparkle" aria-hidden="true" /> НАЧНЁМ С ВАШЕГО ЖЕЛАНИЯ
+          </p>
           <h2>Время перемен.</h2>
           <ButtonLink to="/book">Выбрать время</ButtonLink>
           <span className="closing-word" aria-hidden="true">

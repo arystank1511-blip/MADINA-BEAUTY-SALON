@@ -39,6 +39,21 @@ export class BookingDto {
   @Matches(offset)
   startsAt!: string;
 }
+export class BookingRequestDto {
+  @ApiProperty() @IsUUID() serviceId!: string;
+  @ApiProperty({ required: false }) @IsOptional() @IsUUID() masterId?: string;
+  @ApiProperty({ required: false, example: '2030-01-07T10:00:00+05:00' })
+  @IsOptional()
+  @IsDateString({ strict: true })
+  @Matches(offset)
+  startsAt?: string;
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @Transform(({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value))
+  @IsString()
+  @Length(0, 80)
+  name?: string;
+}
 export class AdminBookingDto extends BookingDto {
   @ApiProperty() @IsUUID() customerId!: string;
 }

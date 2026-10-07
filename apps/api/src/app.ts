@@ -12,10 +12,11 @@ import { BookingController } from './booking/booking.controller';
 import { AdminController } from './admin/admin.controller';
 import { PublicController } from './public.controller';
 import { Errors } from './errors';
+import { Telegram } from './telegram';
 import { config, isAllowedOrigin } from './config';
 @Module({
   controllers: [AuthController, BookingController, AdminController, PublicController],
-  providers: [Db, SessionGuard, BookingService],
+  providers: [Db, SessionGuard, BookingService, Telegram],
 })
 export class AppModule {}
 export async function createApp() {

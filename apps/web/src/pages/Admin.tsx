@@ -1,6 +1,7 @@
 import { FormEvent, Fragment, useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Temporal } from '@js-temporal/polyfill';
+import { Check } from 'lucide-react';
 import {
   api,
   Appointment,
@@ -18,7 +19,11 @@ import {
   Window,
 } from '../api';
 import { ButtonLink, ErrorBox, Loading, Modal } from '../components';
-import { statusNames } from './MyAppointments';
+export const statusNames = {
+  CONFIRMED: 'Подтверждена',
+  CANCELLED: 'Отменена',
+  COMPLETED: 'Завершена',
+};
 const days = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота', 'Воскресенье'];
 const fd = (e: FormEvent<HTMLFormElement>) => {
   e.preventDefault();
@@ -273,7 +278,12 @@ function Services({ config }: { config: Config }) {
   return (
     <>
       <div className="admin-toolbar">
-        <h2>Услуги и цены</h2>
+        <div>
+          <h2>Услуги и цены</h2>
+          <p className="caption">
+            Введите новую цену и нажмите «Сохранить» — на сайте она обновится сразу.
+          </p>
+        </div>
         <button
           className="button"
           onClick={() => {
@@ -305,7 +315,9 @@ function Services({ config }: { config: Config }) {
               {query.data?.map((s) => (
                 <tr key={s.id}>
                   <td>{s.name}</td>
-                  <td>{money(s.priceMinor, config.currency)}</td>
+                  <td>
+                    <PriceEditor service={s} config={config} />
+                  </td>
                   <td>{s.durationMinutes} мин</td>
                   <td>{s.bufferAfterMinutes} мин</td>
                   <td>{s.isActive ? 'Активна' : 'Неактивна'}</td>
@@ -387,6 +399,67 @@ function Services({ config }: { config: Config }) {
         </Modal>
       )}
     </>
+  );
+}
+function PriceEditor({ service, config }: { service: Service; config: Config }) {
+  const client = useQueryClient();
+  const [value, setValue] = useState(String(service.priceMinor / 100));
+  const [saved, setSaved] = useState(false);
+  useEffect(() => setValue(String(service.priceMinor / 100)), [service.priceMinor]);
+  const mutation = useMutation({
+    mutationFn: (priceMinor: number) =>
+      send(`/admin/services/${service.id}`, 'PATCH', { priceMinor }),
+    onSuccess: () => {
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+      void client.invalidateQueries({ queryKey: ['services'] });
+    },
+  });
+  const priceMinor = Math.round(Number(value) * 100);
+  const valid = value.trim() !== '' && Number.isFinite(priceMinor) && priceMinor >= 0;
+  const changed = valid && priceMinor !== service.priceMinor;
+  return (
+    <form
+      className="price-editor"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (changed) mutation.mutate(priceMinor);
+      }}
+    >
+      <label>
+        <span className="sr-only">
+          Цена «{service.name}», {config.currency}
+        </span>
+        <input
+          type="number"
+          inputMode="decimal"
+          min="0"
+          max="1000000"
+          step="1"
+          value={value}
+          onChange={(e) => {
+            mutation.reset();
+            setValue(e.target.value);
+          }}
+        />
+      </label>
+      <button
+        disabled={!changed || mutation.isPending}
+        aria-label={`Сохранить цену «${service.name}»`}
+      >
+        {mutation.isPending ? '…' : saved ? <Check size={18} /> : 'Сохранить'}
+      </button>
+      {saved && (
+        <small role="status" className="price-saved">
+          Цена обновлена
+        </small>
+      )}
+      {mutation.error && (
+        <small className="field-error" role="alert">
+          {mutation.error.message}
+        </small>
+      )}
+    </form>
   );
 }
 function Masters() {

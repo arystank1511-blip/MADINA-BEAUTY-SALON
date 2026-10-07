@@ -11,6 +11,8 @@ export const config = {
   address: process.env.SALON_ADDRESS || 'Адрес салона уточняется',
   contact: process.env.SALON_CONTACT || 'Контакты салона уточняются',
   hours: process.env.SALON_HOURS || 'Ежедневно · 10:00–19:00',
+  // Digits only, international format without '+': used for wa.me links.
+  whatsapp: (process.env.SALON_WHATSAPP || '77767296558').replace(/\D/g, ''),
   demo: process.env.DEMO_MODE === 'true',
   production: process.env.NODE_ENV === 'production',
 };
