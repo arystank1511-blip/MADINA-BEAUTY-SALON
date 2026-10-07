@@ -798,7 +798,7 @@ function ScheduleEditor({ id, config }: { id: string; config: Config }) {
                       onChange={(e) =>
                         setHours(
                           e.target.checked
-                            ? [...hours, { weekday: i + 1, startTime: '10:00', endTime: '19:00' }]
+                            ? [...hours, { weekday: i + 1, startTime: '10:00', endTime: '18:00' }]
                             : hours.filter((w) => w.weekday !== i + 1),
                         )
                       }
