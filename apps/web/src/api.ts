@@ -6,6 +6,8 @@ export interface Config {
   address: string;
   contact: string;
   hours: string;
+  payment: string;
+  map: string;
   whatsapp: string;
   demo: boolean;
 }
