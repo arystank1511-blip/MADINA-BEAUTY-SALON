@@ -25,8 +25,10 @@ export function isAllowedOrigin(origin: string | undefined): boolean {
   if (!origin) return false;
   if (origin === config.origin) return true;
   if (process.env.VERCEL !== '1') return false;
-  // Only platform-provided URLs for this project; never a request Host or wildcard suffix.
+  // Only platform-provided URLs for this project and its public domain;
+  // never a request Host or wildcard suffix.
   return [
+    process.env.PUBLIC_HOST || 'madina-salon.vercel.app',
     process.env.VERCEL_URL,
     process.env.VERCEL_BRANCH_URL,
     process.env.VERCEL_PROJECT_PRODUCTION_URL,

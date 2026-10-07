@@ -6,7 +6,7 @@
 
 Онлайн-запись для салона «Мадина»: **React + NestJS + PostgreSQL + Prisma**. Русский интерфейс, запись гостей через WhatsApp, уведомления в Telegram и административное управление. Пересекающиеся посещения одного мастера запрещены самой PostgreSQL.
 
-Онлайн-демо: **https://forma-salon-booking.vercel.app**. Vercel-проект называется **madina_beauty** (бывший forma-salon-booking); он обслуживает frontend и API; данные сохраняются в отдельной Neon PostgreSQL. Настройка и обновление описаны в [VERCEL.md](docs/VERCEL.md).
+Сайт: **https://madina-salon.vercel.app** (старый адрес forma-salon-booking.vercel.app перенаправляется). Превью ссылки в мессенджерах — `apps/web/public/og-image.jpg`, теги в `apps/web/index.html`. Vercel-проект называется **madina_beauty** (бывший forma-salon-booking); он обслуживает frontend и API; данные сохраняются в отдельной Neon PostgreSQL. Настройка и обновление описаны в [VERCEL.md](docs/VERCEL.md).
 
 ![Главная страница](docs/screenshots/home-1440.png)
 
