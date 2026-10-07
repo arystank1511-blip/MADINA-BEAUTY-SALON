@@ -2139,6 +2139,15 @@ header {
 .whatsapp-float:hover .wa-icon {
   animation: wiggle 600ms var(--ease);
 }
+.password-form {
+  max-width: 480px;
+  display: grid;
+  gap: 4px;
+}
+.password-form .button {
+  margin-top: 12px;
+  justify-self: start;
+}
 /* Admin price editor */
 .price-editor {
   display: flex;

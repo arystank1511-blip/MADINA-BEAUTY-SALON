@@ -31,6 +31,10 @@ export class LoginDto {
 export class RegisterDto extends LoginDto {
   @ApiProperty() @IsString() @Length(2, 80) name!: string;
 }
+export class PasswordDto {
+  @ApiProperty() @IsString() @Length(1, 128) currentPassword!: string;
+  @ApiProperty({ minLength: 12 }) @IsString() @Length(12, 128) newPassword!: string;
+}
 export class BookingDto {
   @ApiProperty() @IsUUID() serviceId!: string;
   @ApiProperty() @IsUUID() masterId!: string;

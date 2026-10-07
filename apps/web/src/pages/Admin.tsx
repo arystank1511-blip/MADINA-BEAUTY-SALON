@@ -41,7 +41,7 @@ export function Admin({ config }: { config: Config }) {
         <ButtonLink to="/admin/new">Записать клиента</ButtonLink>
       </div>
       <nav className="tabs" aria-label="Разделы управления">
-        {['Записи', 'Услуги', 'Мастера', 'Расписание'].map((t) => (
+        {['Записи', 'Услуги', 'Мастера', 'Расписание', 'Пароль'].map((t) => (
           <button
             key={t}
             aria-current={tab === t ? 'page' : undefined}
@@ -58,6 +58,8 @@ export function Admin({ config }: { config: Config }) {
         <Services config={config} />
       ) : tab === 'Мастера' ? (
         <Masters />
+      ) : tab === 'Пароль' ? (
+        <Password />
       ) : (
         <Schedule config={config} />
       )}
@@ -398,6 +400,77 @@ function Services({ config }: { config: Config }) {
           </form>
         </Modal>
       )}
+    </>
+  );
+}
+function Password() {
+  const [done, setDone] = useState(false);
+  const [mismatch, setMismatch] = useState(false);
+  const mutation = useMutation({
+    mutationFn: (body: { currentPassword: string; newPassword: string }) =>
+      send('/auth/password', 'POST', body),
+    onSuccess: () => setDone(true),
+  });
+  function submit(e: FormEvent<HTMLFormElement>) {
+    const form = e.currentTarget;
+    const f = fd(e);
+    const next = String(f.get('next'));
+    setDone(false);
+    setMismatch(next !== String(f.get('repeat')));
+    if (next !== String(f.get('repeat'))) return;
+    mutation.mutate(
+      { currentPassword: String(f.get('current')), newPassword: next },
+      { onSuccess: () => form.reset() },
+    );
+  }
+  return (
+    <>
+      <div className="admin-toolbar">
+        <div>
+          <h2>Смена пароля</h2>
+          <p className="caption">
+            Не менее 12 символов. После смены все остальные устройства выйдут из админки.
+          </p>
+        </div>
+      </div>
+      <form className="panel password-form" onSubmit={submit}>
+        <label>
+          Текущий пароль
+          <input type="password" name="current" autoComplete="current-password" required />
+        </label>
+        <label>
+          Новый пароль
+          <input
+            type="password"
+            name="next"
+            autoComplete="new-password"
+            minLength={12}
+            maxLength={128}
+            required
+          />
+        </label>
+        <label>
+          Повторите новый пароль
+          <input
+            type="password"
+            name="repeat"
+            autoComplete="new-password"
+            minLength={12}
+            maxLength={128}
+            required
+          />
+        </label>
+        {mismatch && <small className="field-error">Пароли не совпадают.</small>}
+        {mutation.error && <ErrorBox error={mutation.error} />}
+        {done && (
+          <p role="status" className="price-saved">
+            Пароль изменён.
+          </p>
+        )}
+        <button className="button" disabled={mutation.isPending}>
+          {mutation.isPending ? 'Сохраняем…' : 'Сменить пароль'}
+        </button>
+      </form>
     </>
   );
 }

@@ -316,6 +316,28 @@ describe.sequential('real PostgreSQL, HTTP and independent Nest instances', () =
       ).status,
     ).toBe(409);
   });
+  it('password change checks the current password and revokes other sessions', async () => {
+    const email = `password-${randomUUID()}@example.com`;
+    const first = await call('/auth/register', 'POST', {
+      name: 'Password test',
+      email,
+      password: 'TestPassword123!',
+    });
+    const other = await call('/auth/login', 'POST', { email, password: 'TestPassword123!' });
+    const change = (currentPassword: string, newPassword: string) =>
+      call('/auth/password', 'POST', { currentPassword, newPassword }, first.cookie, 1);
+    expect((await change('WrongPassword123!', 'NewPassword4567!')).status).toBe(400);
+    expect((await change('TestPassword123!', 'short')).status).toBe(400);
+    expect((await change('TestPassword123!', 'NewPassword4567!')).status).toBe(201);
+    expect((await call('/auth/me', 'GET', undefined, first.cookie)).status).toBe(200);
+    expect((await call('/auth/me', 'GET', undefined, other.cookie)).status).toBe(401);
+    expect(
+      (await call('/auth/login', 'POST', { email, password: 'TestPassword123!' }, '', 1)).status,
+    ).toBe(401);
+    expect(
+      (await call('/auth/login', 'POST', { email, password: 'NewPassword4567!' }, '', 1)).status,
+    ).toBe(201);
+  });
   it('serves calendar queries across skipped or repeated midnight', async () => {
     const { config } = loadCompiled('../dist/src/config.js') as { config: { timezone: string } };
     const original = config.timezone;
