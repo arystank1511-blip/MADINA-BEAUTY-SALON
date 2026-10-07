@@ -13,7 +13,6 @@
 ## Изображения
 
 - `team.png`: синтетические портреты трёх вымышленных мастеров, созданы инструментом OpenAI image generation специально для проекта. Один общий файл показывается с разным object-position; исходное изображение не обрезалось и не ретушировалось. На сайте обозначен демонстрационный характер команды.
-- `interior.jpg`: Kawê Rodrigues, Unsplash: https://unsplash.com/photos/a-man-cutting-another-mans-hair-in-a-salon-JsiH9gv73n0. Источник изображения: https://images.unsplash.com/photo-1703792686658-24e62d626ed2. Условия: https://unsplash.com/license. Это иллюстрация салона, не фотография действующей FORMA.
 - Manrope Variable: пакет @fontsource-variable/manrope, OFL-1.1, локальные WOFF2 с font-display: swap. Lucide icons: ISC. Зависимости сохраняют собственные лицензии.
 - Точечная графика hero/footer/404: собственный SVG pattern и mask, без WebGL и DOM-частиц.
 

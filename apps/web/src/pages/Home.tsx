@@ -75,12 +75,16 @@ export function Home({ config }: { config: Config }) {
           </p>
           <p>От первого разговора до последнего штриха. Внимательно, спокойно и без лишнего.</p>
         </div>
-        <div className="interior">
+        <div className="interior brand-panel">
+          <Halftone id="about" />
           <img
-            src="/images/interior.jpg"
-            alt="Демонстрационная фотография интерьера парикмахерской"
+            src="/images/madina-logo.svg"
+            alt={`Парикмахерская «${config.name}»`}
             loading="lazy"
           />
+          <p className="brand-panel-tags" aria-hidden="true">
+            Стрижки · Окрашивание · Укладка · Уход
+          </p>
           <span>ПРОСТРАНСТВО ДЛЯ ПЕРЕМЕН ↗</span>
         </div>
       </Section>

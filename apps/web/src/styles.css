@@ -2148,6 +2148,32 @@ header {
   margin-top: 12px;
   justify-self: start;
 }
+/* Brand panel instead of a stock interior photo */
+.brand-panel {
+  isolation: isolate;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 18px;
+  background: radial-gradient(circle at 50% 45%, #2a0e15 0, #120b0d 55%, #0b0809 100%);
+  border: 1px solid var(--line);
+  padding-bottom: 56px;
+}
+.interior.brand-panel img {
+  width: min(56%, 300px);
+  height: auto;
+  object-fit: contain;
+  animation: breathe 6s ease-in-out infinite;
+}
+.brand-panel-tags {
+  margin: 0;
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  text-align: center;
+  padding: 0 16px;
+}
 /* Admin price editor */
 .price-editor {
   display: flex;
@@ -2279,6 +2305,9 @@ header {
   }
   .service-row:hover {
     padding-inline: 0;
+  }
+  .brand-panel-tags {
+    display: none;
   }
 }
 @media (prefers-reduced-motion: reduce) {
