@@ -64,7 +64,7 @@ async function seed() {
       },
     });
   const masters = [
-    ['Нургуль', 'Мастер салона «Мадина».', null, [10, 11, 12, 13, 14, 15, 16]],
+    ['Нургуль', 'Мастер салона «Мадина».', '/images/nurgul.webp', [10, 11, 12, 13, 14, 15, 16]],
   ] as const;
   for (const [i, m] of masters.entries()) {
     if (await db.master.findUnique({ where: { id: id(23 + i) } })) continue;

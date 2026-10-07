@@ -11,7 +11,7 @@
 3. Установите `DEMO_MODE=true`, `NODE_ENV=production`, `TRUST_PROXY=1`, `SALON_TIMEZONE=Asia/Almaty`, `SALON_CURRENCY=KZT`. Для Vercel включите системные переменные окружения.
 4. Перед первым деплоем примените `pnpm db:migrate` с URL новой облачной базы. Для создания демо-данных один раз выполните `pnpm db:seed` с `DEMO_MODE=true` и `NODE_ENV=development` только в процессе seed. Обслуживание сайта должно оставаться в production, чтобы cookie использовали HTTPS.
 5. `vercel deploy --target preview` создаёт preview. Для первого деплоя указывайте target явно: CLI может назначить первый деплой нового проекта production автоматически. Сервер принимает точные системные адреса этого Vercel-проекта (`VERCEL_URL`, `VERCEL_BRANCH_URL`, `VERCEL_PROJECT_PRODUCTION_URL`). Для собственного домена задайте точный `APP_ORIGIN=https://ваш-домен`. Подстановочные маски и пользовательский Host не используются для CSRF.
-6. Миграции новых версий выполняйте отдельно до деплоя. Автоматическая сборка намеренно не меняет схему БД для каждого preview.
+6. Production-сборка сама применяет новые миграции (`scripts/vercel-migrate.sh`, прямое подключение `DATABASE_URL_UNPOOLED`). Если миграция не удалась, сборка падает и остаётся прежняя версия сайта. Preview-сборки схему БД не меняют.
 
 ## Проверки
 
