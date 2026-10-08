@@ -13,3 +13,5 @@ if [ -z "$url" ]; then
   exit 1
 fi
 DATABASE_URL="$url" pnpm db:migrate
+# Hand the admin login over to ADMIN_EMAIL/ADMIN_PASSWORD once, if they are set.
+DATABASE_URL="$url" pnpm --filter @forma/api exec tsx prisma/sync-admin.ts
