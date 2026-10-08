@@ -22,6 +22,8 @@ import { config } from '../config';
 import { fail } from '../errors';
 import { LoginDto, PasswordDto, RegisterDto } from '../dto';
 const scrypt = promisify(derive);
+// The master uses one phone; keep her signed in instead of asking for the password weekly.
+const SESSION_DAYS = 180;
 export async function hashPassword(password: string): Promise<string> {
   const salt = randomBytes(16).toString('hex');
   const hash = (await scrypt(password, salt, 64)) as Buffer;
@@ -86,7 +88,7 @@ export class AuthController {
       data: {
         userId: user.id,
         tokenHash: digest(token),
-        expiresAt: new Date(Date.now() + 7 * 86400000),
+        expiresAt: new Date(Date.now() + SESSION_DAYS * 86400000),
       },
     });
     res.cookie('forma_session', token, {
@@ -94,7 +96,7 @@ export class AuthController {
       secure: config.production,
       sameSite: 'lax',
       path: '/',
-      maxAge: 7 * 86400000,
+      maxAge: SESSION_DAYS * 86400000,
     });
     return user;
   }

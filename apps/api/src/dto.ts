@@ -45,18 +45,44 @@ export class BookingDto {
 }
 export class BookingRequestDto {
   @ApiProperty() @IsUUID() serviceId!: string;
-  @ApiProperty({ required: false }) @IsOptional() @IsUUID() masterId?: string;
-  @ApiProperty({ required: false, example: '2030-01-07T10:00:00+05:00' })
-  @IsOptional()
+  @ApiProperty() @IsUUID() masterId!: string;
+  @ApiProperty({ example: '2030-01-07T10:00:00+05:00' })
   @IsDateString({ strict: true })
   @Matches(offset)
-  startsAt?: string;
-  @ApiProperty({ required: false })
+  startsAt!: string;
+  @ApiProperty({ example: 'Айгерим' })
+  @Transform(({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value))
+  @IsString()
+  @Length(2, 80)
+  name!: string;
+  @ApiProperty({ required: false, example: '+7 700 000 00 00' })
   @IsOptional()
   @Transform(({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value))
   @IsString()
-  @Length(0, 80)
-  name?: string;
+  @Matches(/^[+\d\s()-]{0,30}$/)
+  phone?: string;
+}
+const trim = ({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value);
+export class QuickBookingDto extends BookingDto {
+  @ApiProperty({ example: 'Айгерим' })
+  @Transform(trim)
+  @IsString()
+  @Length(2, 80)
+  guestName!: string;
+  @ApiProperty({ required: false, example: '+7 700 000 00 00' })
+  @IsOptional()
+  @Transform(trim)
+  @IsString()
+  @Matches(/^[+\d\s()-]{0,30}$/)
+  guestPhone?: string;
+}
+export class DayQuery {
+  @ApiProperty({ required: false, example: '2030-01-07' })
+  @IsOptional()
+  @IsDateString({ strict: true })
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  date?: string;
+  @ApiProperty({ required: false }) @IsOptional() @IsUUID() masterId?: string;
 }
 export class AdminBookingDto extends BookingDto {
   @ApiProperty() @IsUUID() customerId!: string;
@@ -133,8 +159,8 @@ export class ListDto {
   @ApiProperty({ required: false }) @IsOptional() @IsUUID() masterId?: string;
   @ApiProperty({ required: false })
   @IsOptional()
-  @IsIn(['CONFIRMED', 'CANCELLED', 'COMPLETED'])
-  status?: 'CONFIRMED' | 'CANCELLED' | 'COMPLETED';
+  @IsIn(['PENDING', 'CONFIRMED', 'CANCELLED', 'COMPLETED'])
+  status?: 'PENDING' | 'CONFIRMED' | 'CANCELLED' | 'COMPLETED';
   @ApiProperty({ required: false })
   @IsOptional()
   @IsDateString({ strict: true })

@@ -6,7 +6,8 @@ async function login(page: Page) {
   await page.getByLabel('Email', { exact: true }).fill('admin@forma.example');
   await page.getByLabel('Пароль', { exact: true }).fill('FormaDemo2026!');
   await page.getByRole('button', { name: 'Войти', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Рабочее пространство.' })).toBeVisible();
+  // Staff land on the master's day view.
+  await expect(page.getByRole('heading', { name: 'Мой день' })).toBeVisible();
 }
 async function pickSlot(page: Page, daysAhead: number) {
   // The salon has a single master, so choosing a service goes straight to the calendar.
@@ -30,7 +31,6 @@ test('malformed booking URL remains usable', async ({ page }) => {
 });
 test('guest books through WhatsApp without an account; responsive screenshots', async ({
   page,
-  context,
 }) => {
   await mkdir('docs/screenshots', { recursive: true });
   for (const width of widths) {
@@ -58,27 +58,43 @@ test('guest books through WhatsApp without an account; responsive screenshots', 
   }
   await page.locator('.slots button').first().click();
   await page.getByRole('button', { name: 'Продолжить', exact: true }).click();
-  await page.getByLabel('Ваше имя (необязательно)').fill('Анна');
-  const link = page.getByRole('link', { name: 'Записаться через WhatsApp' });
-  const href = (await link.getAttribute('href')) || '';
+  await page.getByLabel('Ваше имя').fill('Анна');
+  await page.getByLabel('Телефон (необязательно)').fill('+7 701 000 00 00');
+  const request = page.waitForResponse('**/api/v1/booking-requests');
+  await page.getByRole('button', { name: 'Записаться', exact: true }).click();
+  const response = await request;
+  expect(response.status()).toBe(201);
+  expect(response.request().postDataJSON()).toMatchObject({ name: 'Анна' });
+  await expect(page.getByRole('heading', { name: 'Остался один шаг.' })).toBeVisible();
+  const href =
+    (await page.getByRole('link', { name: 'Отправить в WhatsApp' }).getAttribute('href')) || '';
   expect(href.startsWith('https://wa.me/77767296558?text=')).toBe(true);
   const text = decodeURIComponent(href.split('?text=')[1]);
   expect(text).toContain('Мужская стрижка');
   expect(text).toContain('Нургуль');
   expect(text).toContain('Меня зовут Анна.');
-  // Never leave the test environment for WhatsApp itself.
-  await context.route('https://wa.me/**', (route) => route.fulfill({ body: 'WhatsApp' }));
-  const request = page.waitForRequest('**/api/v1/booking-requests');
-  const popup = page.waitForEvent('popup');
-  await link.click();
-  expect((await request).postDataJSON()).toMatchObject({ name: 'Анна' });
-  await (await popup).close();
-  await expect(page.getByRole('heading', { name: 'Отправьте сообщение.' })).toBeVisible();
+  // The request holds the slot: it is no longer offered to the next visitor.
+  const { id, startsAt } = await response.json();
+  await page.goto('/book');
+  await pickSlot(page, 5);
+  const held = new Intl.DateTimeFormat('ru-RU', {
+    timeZone: 'Asia/Almaty',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(startsAt));
+  await expect(page.locator('.slots button', { hasText: held })).toHaveCount(0);
+  await login(page);
+  const origin = new URL(page.url()).origin;
+  await page.request.patch(`/api/v1/admin/appointments/${id}/cancel`, {
+    headers: { Origin: origin, 'X-CSRF-Protection': '1' },
+    data: {},
+  });
 });
 test('admin changes a service price inline and edits working hours; no page overflow', async ({
   page,
 }) => {
   await login(page);
+  await page.goto('/admin');
   await expect(page.locator('table')).toBeVisible();
   for (const width of widths) {
     await page.setViewportSize({ width, height: 1000 });
@@ -186,4 +202,52 @@ test('mobile menu supports Escape; booking reflows at 200 percent', async ({ pag
   );
   await page.getByRole('button', { name: /Мужская стрижка/ }).click();
   await expect(page.getByRole('heading', { name: 'Когда вам удобно?' })).toBeVisible();
+});
+
+test('master day: book a walk-in, confirm a site request, cancel', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await login(page);
+  await page.getByRole('button', { name: 'Завтра', exact: true }).click();
+  await expect(page.locator('.md-free').first()).toBeVisible();
+  const name = `Сауле ${Date.now() % 10000}`;
+  await page.locator('.md-free').first().click();
+  await page.getByLabel('Имя клиента').fill(name);
+  await page.getByLabel('Телефон (если есть)').fill('87772223344');
+  await page.getByRole('button', { name: '✓ Записать' }).click();
+  const card = page.locator('.md-card').filter({ hasText: name });
+  await expect(card).toBeVisible();
+  await expect(card.getByRole('link', { name: /Позвонить/ })).toHaveAttribute(
+    'href',
+    'tel:+87772223344',
+  );
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  // A request from the site appears at the top and is confirmed with one tap.
+  const day = await page.request.get(
+    '/api/v1/admin/day?date=' + new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 10),
+  );
+  const data = await day.json();
+  const serviceId = data.services[0].id;
+  const slot = data.fits[serviceId].at(-1);
+  const guest = `Гость ${Date.now() % 10000}`;
+  const origin = new URL(page.url()).origin;
+  const created = await page.request.post('/api/v1/booking-requests', {
+    headers: { Origin: origin, 'X-CSRF-Protection': '1' },
+    data: { serviceId, masterId: data.master.id, startsAt: slot, name: guest },
+  });
+  expect(created.status()).toBe(201);
+  await page.reload();
+  const pending = page.locator('.md-pending .md-card').filter({ hasText: guest });
+  await expect(pending).toBeVisible();
+  await pending.getByRole('button', { name: /Подтвердить/ }).click();
+  await expect(pending).toHaveCount(0);
+  // Cancel the walk-in; its time becomes free again.
+  await page.getByRole('button', { name: 'Завтра', exact: true }).click();
+  await card.getByRole('button', { name: 'Отменить запись' }).click();
+  await page.getByRole('button', { name: 'Да, отменить' }).click();
+  await expect(card).toHaveCount(0);
+  const { id } = await created.json();
+  await page.request.patch(`/api/v1/admin/appointments/${id}/cancel`, {
+    headers: { Origin: origin, 'X-CSRF-Protection': '1' },
+    data: {},
+  });
 });

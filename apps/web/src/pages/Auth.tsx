@@ -20,9 +20,9 @@ export function Auth({ config }: { config: Config }) {
     client = useQueryClient();
   const form = useForm<z.infer<typeof schema>>({ resolver: zodResolver(schema) });
   const raw = params.get('returnTo');
-  let returnTo = '/admin';
+  let returnTo = '/master';
   try {
-    const destination = new URL(raw || '/admin', window.location.origin);
+    const destination = new URL(raw || '/master', window.location.origin);
     if (destination.origin === window.location.origin)
       returnTo = destination.pathname + destination.search + destination.hash;
   } catch {

@@ -8,6 +8,15 @@ import { BookingDto, ListDto } from '../dto';
 import { Actor, safeUser } from '../auth/auth';
 import { startOfDay, salonDate, slotsForDay } from '../availability/rules';
 export type Tx = Prisma.TransactionClient;
+/** Who the visit is for: a registered customer or a person known only by name. */
+export type Client = { customerId: string } | { guestName: string; guestPhone?: string };
+/** How long a site request holds its slot while waiting for the master. */
+export const HOLD_MINUTES = 180;
+/** Appointments that occupy time: everything except cancelled visits and lapsed holds. */
+export const activeAt = (now: Date): Prisma.AppointmentWhereInput => ({
+  status: { not: 'CANCELLED' },
+  NOT: { status: 'PENDING', holdUntil: { lte: now } },
+});
 export const appointmentInclude = {
   master: { select: { id: true, name: true, avatarUrl: true } },
   customer: { select: safeUser },
@@ -41,7 +50,7 @@ export class BookingService {
     const appointments = await tx.appointment.findMany({
       where: {
         masterId,
-        status: { not: 'CANCELLED' },
+        ...activeAt(now),
         startsAt: { lt: end },
         occupiedUntil: { gt: start },
       },
@@ -60,30 +69,57 @@ export class BookingService {
       }),
     };
   }
+  /** Lapsed site holds become cancelled so the exclusion constraint frees their time. */
+  async expireHolds(tx: Tx, masterId: string, now = new Date()) {
+    await tx.appointment.updateMany({
+      where: { masterId, status: 'PENDING', holdUntil: { lte: now } },
+      data: { status: 'CANCELLED', cancelledAt: now, holdUntil: null },
+    });
+  }
   async create(body: BookingDto, customerId: string) {
+    return this.book(body, { customerId });
+  }
+  /**
+   * Books a visit after re-checking availability under the master lock.
+   * `pending` holds the slot for HOLD_MINUTES until the master confirms it;
+   * `walkIn` lets the master book slots starting right now (clients need 30 minutes' notice).
+   */
+  async book(
+    body: BookingDto,
+    client: Client,
+    options: { pending?: boolean; walkIn?: boolean } = {},
+  ) {
     return this.db.$transaction(
       async (tx) => {
         // A shared service lock allows bookings for different masters concurrently.
         await tx.$queryRaw`SELECT id FROM "Service" WHERE id=${body.serviceId}::uuid FOR SHARE`;
         await this.lockMaster(tx, body.masterId);
-        const customer = await tx.user.findUnique({
-          where: { id: customerId },
-          select: { role: true },
-        });
-        if (!customer || customer.role !== 'CUSTOMER')
-          fail(400, 'INVALID_CUSTOMER', 'Выберите существующего клиента.');
+        if ('customerId' in client) {
+          const customer = await tx.user.findUnique({
+            where: { id: client.customerId },
+            select: { role: true },
+          });
+          if (!customer || customer.role !== 'CUSTOMER')
+            fail(400, 'INVALID_CUSTOMER', 'Выберите существующего клиента.');
+        }
+        const now = new Date();
+        await this.expireHolds(tx, body.masterId, now);
         const start = new Date(body.startsAt);
         const { service, slots } = await this.availability(
           tx,
           body.serviceId,
           body.masterId,
           salonDate(start, config.timezone),
+          // Clients need 30 minutes' notice; the master may book a visit that started up to 30 minutes ago.
+          options.walkIn ? new Date(+now - 60 * 60000) : now,
         );
         const slot = slots.find((s) => s.startsAt === start.toISOString());
         if (!slot) unavailable();
         return tx.appointment.create({
           data: {
-            customerId,
+            ...('customerId' in client
+              ? { customerId: client.customerId }
+              : { guestName: client.guestName, guestPhone: client.guestPhone || null }),
             masterId: body.masterId,
             serviceId: body.serviceId,
             startsAt: start,
@@ -93,6 +129,12 @@ export class BookingService {
             priceMinor: service.priceMinor,
             durationMinutes: service.durationMinutes,
             bufferAfterMinutes: service.bufferAfterMinutes,
+            ...(options.pending
+              ? {
+                  status: 'PENDING' as const,
+                  holdUntil: new Date(Math.min(+now + HOLD_MINUTES * 60000, +start)),
+                }
+              : {}),
           },
           include: appointmentInclude,
         });
@@ -110,13 +152,24 @@ export class BookingService {
       fail(404, 'NOT_FOUND', 'Запись не найдена.');
     return a;
   }
-  async change(id: string, actor: Actor, complete = false) {
+  async change(id: string, actor: Actor, action: 'cancel' | 'complete' | 'confirm' = 'cancel') {
     const initial = await this.get(id, actor);
     return this.db.$transaction(
       async (tx) => {
         await this.lockMaster(tx, initial.masterId);
         const a = await tx.appointment.findUniqueOrThrow({ where: { id } });
-        if (complete) {
+        if (action === 'confirm') {
+          if (actor.role !== 'ADMIN') fail(403, 'FORBIDDEN', 'Доступ запрещён.');
+          if (a.status === 'CONFIRMED') return a;
+          if (a.status !== 'PENDING' || !a.holdUntil || a.holdUntil <= new Date())
+            fail(409, 'HOLD_EXPIRED', 'Заявка уже неактуальна: время освободилось или отменено.');
+          return tx.appointment.update({
+            where: { id },
+            data: { status: 'CONFIRMED', holdUntil: null },
+            include: appointmentInclude,
+          });
+        }
+        if (action === 'complete') {
           if (actor.role !== 'ADMIN') fail(403, 'FORBIDDEN', 'Доступ запрещён.');
           if (a.status === 'COMPLETED') return a;
           if (a.status !== 'CONFIRMED' || a.endsAt > new Date())
@@ -132,11 +185,16 @@ export class BookingService {
           });
         }
         if (a.status === 'CANCELLED') return a;
-        if (a.status !== 'CONFIRMED' || a.startsAt <= new Date())
-          fail(409, 'CANNOT_CANCEL', 'Отменить можно только будущее подтверждённое посещение.');
+        if (!['CONFIRMED', 'PENDING'].includes(a.status) || a.startsAt <= new Date())
+          fail(409, 'CANNOT_CANCEL', 'Отменить можно только будущее посещение.');
         return tx.appointment.update({
           where: { id },
-          data: { status: 'CANCELLED', cancelledAt: new Date(), cancelledById: actor.id },
+          data: {
+            status: 'CANCELLED',
+            cancelledAt: new Date(),
+            cancelledById: actor.id,
+            holdUntil: null,
+          },
           include: appointmentInclude,
         });
       },

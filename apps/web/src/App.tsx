@@ -16,6 +16,7 @@ import { Home, Catalog } from './pages/Home';
 import { Auth } from './pages/Auth';
 import { Book } from './pages/Book';
 const Admin = lazy(() => import('./pages/Admin').then((m) => ({ default: m.Admin })));
+const MasterDay = lazy(() => import('./pages/MasterDay').then((m) => ({ default: m.MasterDay })));
 function Gate({ children, admin = false }: { children: React.ReactNode; admin?: boolean }) {
   const me = useMe();
   const location = useLocation();
@@ -113,6 +114,7 @@ export function App() {
             <Link to="/#masters">Мастер</Link>
             <Link to="/#about">О салоне</Link>
             <Link to="/#contacts">Контакты</Link>
+            {me.data?.role === 'ADMIN' && <Link to="/master">Мой день</Link>}
             {me.data?.role === 'ADMIN' && <Link to="/admin">Управление</Link>}
             {me.data && (
               <button className="nav-logout" onClick={() => void logout()}>
@@ -154,6 +156,16 @@ export function App() {
             }
           />
           <Route
+            path="/master"
+            element={
+              <Gate admin>
+                <Suspense fallback={<Loading />}>
+                  <MasterDay config={config} />
+                </Suspense>
+              </Gate>
+            }
+          />
+          <Route
             path="/admin/new"
             element={
               <Gate admin>
@@ -186,7 +198,7 @@ export function App() {
           </a>
         </div>
       </footer>
-      {!location.pathname.startsWith('/admin') && <WhatsAppFloat config={config} />}
+      {!/^\/(admin|master)/.test(location.pathname) && <WhatsAppFloat config={config} />}
     </>
   );
 }

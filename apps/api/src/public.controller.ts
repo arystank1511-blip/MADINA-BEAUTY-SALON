@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Post, Query, Req } from '@nestjs/common';
+import { Body, Controller, Get, Post, Query, Req } from '@nestjs/common';
 import { Request } from 'express';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Db } from './db';
@@ -46,9 +46,9 @@ export class PublicController {
     };
   }
   @Post('booking-requests')
-  @HttpCode(202)
   @ApiOperation({
-    summary: 'Заявка гостя перед переходом в WhatsApp; уведомление в Telegram, без записи в БД',
+    summary:
+      'Заявка гостя: держит время до подтверждения мастером, уведомляет в Telegram; 409 если время занято',
   })
   async bookingRequest(@Body() body: BookingRequestDto, @Req() req: Request) {
     const now = Date.now();
@@ -58,38 +58,34 @@ export class PublicController {
     hits.count++;
     this.requests.set(key, hits);
     if (hits.count > 5) fail(429, 'RATE_LIMIT', 'Слишком много заявок. Подождите одну минуту.');
-    // Names come from the database so a request cannot inject arbitrary service text.
-    const [service, master] = await Promise.all([
-      this.db.service.findFirst({ where: { id: body.serviceId, isActive: true } }),
-      body.masterId
-        ? this.db.master.findFirst({ where: { id: body.masterId, isActive: true } })
-        : null,
-    ]);
-    if (!service) fail(404, 'NOT_FOUND', 'Услуга не найдена.');
-    const when = body.startsAt
-      ? new Intl.DateTimeFormat('ru-RU', {
-          timeZone: config.timezone,
-          day: 'numeric',
-          month: 'long',
-          weekday: 'short',
-          hour: '2-digit',
-          minute: '2-digit',
-        }).format(new Date(body.startsAt))
-      : 'не выбрано';
+    const a = await this.booking.book(
+      body,
+      { guestName: body.name, guestPhone: body.phone },
+      { pending: true },
+    );
+    const when = new Intl.DateTimeFormat('ru-RU', {
+      timeZone: config.timezone,
+      day: 'numeric',
+      month: 'long',
+      weekday: 'short',
+      hour: '2-digit',
+      minute: '2-digit',
+    }).format(a.startsAt);
     const price = new Intl.NumberFormat('ru-RU', {
       style: 'currency',
       currency: config.currency,
       maximumFractionDigits: 2,
-    }).format(service.priceMinor / 100);
-    const sent = await this.telegram.notify([
+    }).format(a.priceMinor / 100);
+    const telegram = await this.telegram.notify([
       `Новая заявка · ${config.name}`,
-      `Услуга: ${service.name} (${price}, ${service.durationMinutes} мин)`,
-      `Мастер: ${master?.name || 'любой'}`,
+      `Услуга: ${a.serviceName} (${price}, ${a.durationMinutes} мин)`,
+      `Мастер: ${a.master.name}`,
       `Время: ${when}`,
-      ...(body.name ? [`Имя: ${body.name}`] : []),
-      'Клиент перешёл в WhatsApp для подтверждения.',
+      `Имя: ${body.name}`,
+      ...(body.phone ? [`Телефон: ${body.phone}`] : []),
+      'Время придержано на 3 часа. Подтвердите в «Мой день».',
     ]);
-    return { telegram: sent };
+    return { id: a.id, startsAt: a.startsAt, holdUntil: a.holdUntil, telegram };
   }
   @Get('health') @ApiOperation({ summary: 'Liveness' }) health() {
     return { status: 'ok' };
