@@ -37,17 +37,23 @@ export interface Master {
 export interface Appointment {
   id: string;
   masterId: string;
-  customerId: string;
+  customerId: string | null;
+  guestName: string | null;
+  guestPhone: string | null;
+  holdUntil: string | null;
   serviceName: string;
   priceMinor: number;
   durationMinutes: number;
   startsAt: string;
   endsAt: string;
   occupiedUntil: string;
-  status: 'CONFIRMED' | 'CANCELLED' | 'COMPLETED';
+  status: 'PENDING' | 'CONFIRMED' | 'CANCELLED' | 'COMPLETED';
   master: { id: string; name: string };
-  customer: User;
+  customer: User | null;
 }
+/** Display name of whoever the visit is for: account holder or a guest named by the master. */
+export const clientName = (a: Pick<Appointment, 'customer' | 'guestName'>) =>
+  a.customer?.name || a.guestName || 'Клиент';
 export interface Page<T> {
   items: T[];
   total: number;

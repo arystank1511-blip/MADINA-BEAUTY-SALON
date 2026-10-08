@@ -355,6 +355,80 @@ describe.sequential('real PostgreSQL, HTTP and independent Nest instances', () =
       config.timezone = original;
     }
   });
+  it('site requests hold a slot until confirmed; lapsed holds free it', async () => {
+    // A separate day keeps these checks independent of the bookings made above.
+    const next = Temporal.PlainDate.from(date).add({ days: 1 }).toString();
+    const booking = (time: string) => ({
+      serviceId: service,
+      masterId: master,
+      startsAt: localInstant(next, time, 'Asia/Almaty').toISOString(),
+    });
+    const request = (time: string, name = 'Гость') =>
+      call('/booking-requests', 'POST', { ...booking(time), name });
+    const held = await request('16:00');
+    expect(held.status).toBe(201);
+    const row = await db.appointment.findUniqueOrThrow({ where: { id: held.body.id } });
+    expect(row.status).toBe('PENDING');
+    expect(row.guestName).toBe('Гость');
+    expect(row.customerId).toBeNull();
+    expect((await request('16:00', 'Второй')).status).toBe(409);
+    expect(
+      (await call(`/admin/appointments/${held.body.id}/confirm`, 'PATCH', {}, admin)).body.status,
+    ).toBe('CONFIRMED');
+    // A hold that lapsed no longer blocks the slot and is cancelled on the next booking.
+    const lapsed = await request('12:00');
+    await db.appointment.update({
+      where: { id: lapsed.body.id },
+      data: { holdUntil: new Date(Date.now() - 1000) },
+    });
+    expect(
+      (await call(`/admin/appointments/${lapsed.body.id}/confirm`, 'PATCH', {}, admin)).status,
+    ).toBe(409);
+    const again = await request('12:00', 'Новый');
+    expect(again.status).toBe(201);
+    expect((await db.appointment.findUniqueOrThrow({ where: { id: lapsed.body.id } })).status).toBe(
+      'CANCELLED',
+    );
+    expect(
+      (await call('/booking-requests', 'POST', { ...booking('21:00'), name: '' })).status,
+    ).toBe(400);
+  });
+  it('master books guests without an account and sees them in the day view', async () => {
+    const next = Temporal.PlainDate.from(date).add({ days: 1 }).toString();
+    const at = (time: string) => localInstant(next, time, 'Asia/Almaty').toISOString();
+    const booking = (time: string) => ({
+      serviceId: service,
+      masterId: master,
+      startsAt: at(time),
+    });
+    const quick = (body: object) => call('/admin/quick-appointments', 'POST', body, admin);
+    expect(
+      (await quick({ ...booking('20:00'), guestName: 'Сауле', guestPhone: '8 777 222 33 44' }))
+        .status,
+    ).toBe(201);
+    expect((await quick({ ...booking('20:00'), guestName: 'Дубль' })).status).toBe(409);
+    expect((await quick({ ...booking('21:00') })).status).toBe(400);
+    expect(
+      (
+        await call(
+          '/admin/quick-appointments',
+          'POST',
+          { ...booking('21:00'), guestName: 'X1' },
+          c1,
+        )
+      ).status,
+    ).toBe(403);
+    const day = await call(`/admin/day?date=${next}&masterId=${master}`, 'GET', undefined, admin);
+    expect(day.status).toBe(200);
+    const body = day.body as unknown as {
+      appointments: { guestName: string | null; guestPhone: string | null; status: string }[];
+      fits: Record<string, string[]>;
+    };
+    expect(
+      body.appointments.some((a) => a.guestName === 'Сауле' && a.guestPhone === '8 777 222 33 44'),
+    ).toBe(true);
+    expect(body.fits[service]).not.toContain(at('20:00'));
+  });
   it('rate limits abusive client without blocking another behind the trusted proxy', async () => {
     const attempt = async (ip: string) =>
       fetch(urls[0] + '/api/v1/auth/login', {

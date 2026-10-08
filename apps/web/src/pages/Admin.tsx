@@ -5,6 +5,7 @@ import { Check } from 'lucide-react';
 import {
   api,
   Appointment,
+  clientName,
   Config,
   dateLabel,
   Master,
@@ -20,6 +21,7 @@ import {
 } from '../api';
 import { ButtonLink, ErrorBox, Loading, Modal } from '../components';
 export const statusNames = {
+  PENDING: 'Ждёт подтверждения',
   CONFIRMED: 'Подтверждена',
   CANCELLED: 'Отменена',
   COMPLETED: 'Завершена',
@@ -38,7 +40,9 @@ export function Admin({ config }: { config: Config }) {
           <p className="eyebrow">УПРАВЛЕНИЕ / {config.name}</p>
           <h1>Рабочее пространство.</h1>
         </div>
-        <ButtonLink to="/admin/new">Записать клиента</ButtonLink>
+        <div className="admin-toolbar-actions">
+          <ButtonLink to="/master">Мой день</ButtonLink>
+        </div>
       </div>
       <nav className="tabs" aria-label="Разделы управления">
         {['Записи', 'Услуги', 'Мастера', 'Расписание', 'Пароль'].map((t) => (
@@ -165,8 +169,8 @@ function Appointments({ config }: { config: Config }) {
                         <small>{a.durationMinutes} мин</small>
                       </td>
                       <td>
-                        {a.customer.name}
-                        <small>{a.customer.email}</small>
+                        {clientName(a)}
+                        <small>{a.customer?.email || a.guestPhone}</small>
                       </td>
                       <td>
                         {a.serviceName}
@@ -179,16 +183,17 @@ function Appointments({ config }: { config: Config }) {
                         </span>
                       </td>
                       <td>
-                        {a.status === 'CONFIRMED' && new Date(a.startsAt) > new Date() && (
-                          <button
-                            onClick={() => {
-                              mutation.reset();
-                              setAction({ appointment: a, type: 'cancel' });
-                            }}
-                          >
-                            Отменить
-                          </button>
-                        )}
+                        {(a.status === 'CONFIRMED' || a.status === 'PENDING') &&
+                          new Date(a.startsAt) > new Date() && (
+                            <button
+                              onClick={() => {
+                                mutation.reset();
+                                setAction({ appointment: a, type: 'cancel' });
+                              }}
+                            >
+                              Отменить
+                            </button>
+                          )}
                         {a.status === 'CONFIRMED' && new Date(a.endsAt) <= new Date() && (
                           <button
                             onClick={() => {
@@ -229,7 +234,7 @@ function Appointments({ config }: { config: Config }) {
           onClose={() => !mutation.isPending && setAction(null)}
         >
           <p>
-            {action.appointment.customer.name} · {action.appointment.serviceName}
+            {clientName(action.appointment)} · {action.appointment.serviceName}
           </p>
           {mutation.error && <ErrorBox error={mutation.error} />}
           <div className="form-actions">

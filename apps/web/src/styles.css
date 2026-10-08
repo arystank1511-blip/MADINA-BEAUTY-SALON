@@ -1008,6 +1008,7 @@ dialog {
   padding: 28px;
   width: min(680px, calc(100% - 32px));
   max-height: 90vh;
+  overflow-y: auto;
   border-radius: 2px;
   margin: auto;
 }
@@ -2174,6 +2175,302 @@ header {
   text-align: center;
   padding: 0 16px;
 }
+.whatsapp-prompt form .button {
+  width: 100%;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 8px;
+}
+/* «Мой день» — the master's phone screen: big targets, plain words */
+.master-day {
+  max-width: 720px;
+  margin-inline: auto;
+  padding: 32px 16px 120px;
+}
+.md-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+.md-top .eyebrow {
+  margin-bottom: 8px;
+}
+.md-top h1 {
+  font-size: 44px;
+}
+.md-settings {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border: 1px solid var(--interactive);
+  color: var(--muted);
+}
+.md-pending {
+  margin: 24px 0 8px;
+  padding: 18px;
+  border: 2px solid #f5b400;
+  background: #2a2000;
+  animation: fade 400ms var(--ease) both;
+}
+.md-pending h2 {
+  font-size: 22px;
+  letter-spacing: -0.01em;
+}
+.md-pending .caption {
+  margin: 8px 0 14px;
+  color: #e9d9a5;
+}
+.md-bell {
+  display: inline-block;
+  animation: wiggle 1.4s ease-in-out infinite;
+}
+.md-dates {
+  display: grid;
+  grid-template-columns: 60px 1fr 60px;
+  align-items: center;
+  gap: 10px;
+  margin-top: 26px;
+}
+.md-arrow {
+  height: 60px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+}
+.md-date {
+  text-align: center;
+}
+.md-date strong {
+  display: block;
+  font-size: 26px;
+  text-transform: capitalize;
+}
+.md-date span {
+  color: var(--muted);
+  font-size: 15px;
+}
+.md-chips {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+  margin-top: 14px;
+}
+.md-chips button,
+.md-pick {
+  min-height: 52px;
+  font-size: 17px;
+  font-weight: 600;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--interactive);
+  margin: 0;
+  position: relative;
+}
+.md-chips button.on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.md-pick input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  width: 100%;
+  min-height: 0;
+  cursor: pointer;
+}
+.md-summary {
+  margin: 22px 0 10px;
+  font-size: 17px;
+  color: var(--text);
+}
+.md-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+}
+.md-time {
+  font-size: 22px;
+  font-weight: 700;
+  min-width: 70px;
+}
+.md-free {
+  width: 100%;
+  min-height: 64px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 16px;
+  font-size: 18px;
+  text-align: left;
+  border: 1px dashed #2f6b3f;
+  background: #0d1a10;
+  color: #b9e7c3;
+}
+.md-free:hover:not(:disabled) {
+  background: #12301a;
+  border-color: var(--whatsapp);
+}
+.md-free-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.md-add {
+  flex-shrink: 0;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--whatsapp);
+  color: #062b14;
+  font-weight: 800;
+  padding: 10px 14px;
+}
+.md-card {
+  padding: 16px 18px;
+  background: var(--surface);
+  border-left: 6px solid var(--accent);
+}
+.md-card.pending {
+  border-left-color: #f5b400;
+  background: #1f1a08;
+}
+.md-card.completed {
+  opacity: 0.6;
+}
+.md-card h3 {
+  font-size: 24px;
+  margin: 8px 0 4px;
+}
+.md-card p {
+  margin: 0;
+  font-size: 17px;
+  color: var(--text);
+}
+.md-visit-time {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 20px;
+  font-weight: 700;
+  flex-wrap: wrap;
+}
+.md-badge {
+  font-size: 13px;
+  font-weight: 700;
+  background: #f5b400;
+  color: #1a1400;
+  padding: 3px 8px;
+}
+.md-contacts {
+  display: flex;
+  gap: 10px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+.md-contacts a {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 46px;
+  padding: 10px 14px;
+  border: 1px solid var(--interactive);
+  font-size: 16px;
+}
+.md-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+  flex-wrap: wrap;
+}
+.md-btn {
+  flex: 1;
+  min-height: 56px;
+  font-size: 18px;
+  font-weight: 800;
+  border: 0;
+}
+.md-btn.yes {
+  background: var(--whatsapp);
+  color: #062b14;
+}
+.md-btn.yes:hover:not(:disabled) {
+  background: #3be07a;
+}
+.md-btn.no {
+  background: var(--accent);
+  color: #fff;
+}
+.md-btn.no:hover:not(:disabled) {
+  background: #ff2437;
+}
+.md-btn.ghost {
+  border: 1px solid var(--interactive);
+  color: var(--muted);
+  font-weight: 600;
+}
+.md-btn.big {
+  width: 100%;
+  min-height: 64px;
+  font-size: 20px;
+  margin-top: 6px;
+}
+.md-rest {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 56px;
+  padding: 10px 16px;
+  background: #121212;
+  color: var(--muted);
+  font-size: 17px;
+}
+.md-form label {
+  font-size: 17px;
+}
+.md-form input {
+  min-height: 56px;
+  font-size: 20px;
+}
+.md-services {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.md-services button {
+  min-height: 64px;
+  font-size: 16px;
+  font-weight: 600;
+  text-align: left;
+  display: grid;
+  gap: 2px;
+}
+.md-services button small {
+  color: var(--muted);
+}
+.md-services button.on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.md-services button.on small {
+  color: #ffd6d9;
+}
+.md-confirm-text {
+  font-size: 20px;
+  color: var(--text);
+}
+.badge.pending {
+  background: #3a2e00;
+  color: #ffd75e;
+}
 /* Admin price editor */
 .price-editor {
   display: flex;
@@ -2286,6 +2583,19 @@ header {
 @keyframes shimmer {
   to {
     background-position: -200% 0;
+  }
+}
+@media (max-width: 400px) {
+  .header-inner {
+    gap: 10px;
+    padding-inline: 12px;
+  }
+  .logo img {
+    width: 118px;
+  }
+  .header-inner > .button {
+    gap: 10px;
+    padding: 12px 14px;
   }
 }
 @media (max-width: 950px) {

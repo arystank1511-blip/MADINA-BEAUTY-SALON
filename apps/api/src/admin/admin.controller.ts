@@ -17,7 +17,9 @@ import { Admin, AuthRequest, safeUser, SessionGuard } from '../auth/auth';
 import { Db } from '../db';
 import {
   AdminBookingDto,
+  DayQuery,
   HoursDto,
+  QuickBookingDto,
   ListDto,
   MasterDto,
   MasterPatch,
@@ -27,10 +29,11 @@ import {
   TimeOffDto,
   WindowDto,
 } from '../dto';
-import { BookingService, Tx } from '../booking/booking.service';
+import { activeAt, appointmentInclude, BookingService, Tx } from '../booking/booking.service';
 import { config } from '../config';
 import { fail } from '../errors';
-import { fitsSchedule } from '../availability/rules';
+import { fitsSchedule, localInstant, salonDate, startOfDay } from '../availability/rules';
+import { Temporal } from '@js-temporal/polyfill';
 @ApiTags('Администрирование')
 @ApiCookieAuth()
 @Admin()
@@ -60,18 +63,24 @@ export class AdminController {
             );
         }
         const appointments = await tx.appointment.findMany({
-          where: { masterId: id, status: 'CONFIRMED', startsAt: { gt: new Date() } },
+          where: { masterId: id, ...activeAt(new Date()), startsAt: { gt: new Date() } },
           select: {
             id: true,
             startsAt: true,
             occupiedUntil: true,
             serviceName: true,
+            guestName: true,
             customer: { select: { name: true } },
           },
         });
-        const conflicts = appointments.filter(
-          (a) => !fitsSchedule(a.startsAt, a.occupiedUntil, { ...m, zone: config.timezone }),
-        );
+        const conflicts = appointments
+          .filter(
+            (a) => !fitsSchedule(a.startsAt, a.occupiedUntil, { ...m, zone: config.timezone }),
+          )
+          .map(({ guestName, customer, ...a }) => ({
+            ...a,
+            customer: { name: customer?.name ?? guestName ?? '' },
+          }));
         if (conflicts.length)
           fail(409, 'SCHEDULE_CONFLICT', 'Изменение затрагивает подтверждённые записи.', {
             conflicts,
@@ -245,6 +254,109 @@ export class AdminController {
   create(@Body() b: AdminBookingDto) {
     return this.booking.create(b, b.customerId);
   }
+  @Post('quick-appointments')
+  @ApiOperation({ summary: 'Запись клиента без аккаунта (имя, телефон) — для мастера' })
+  quick(@Body() b: QuickBookingDto) {
+    return this.booking.book(
+      b,
+      { guestName: b.guestName, guestPhone: b.guestPhone },
+      { walkIn: true },
+    );
+  }
+  @Get('day')
+  @ApiOperation({ summary: 'День мастера: часы работы, перерывы, отсутствия и записи' })
+  async day(@Query() q: DayQuery) {
+    const now = new Date();
+    const date = q.date || salonDate(now, config.timezone);
+    const masters = await this.db.master.findMany({
+      where: { isActive: true },
+      select: { id: true, name: true },
+      orderBy: { createdAt: 'asc' },
+    });
+    const masterId = q.masterId || masters[0]?.id;
+    if (!masterId) fail(404, 'NOT_FOUND', 'Нет активных мастеров.');
+    const master = await this.db.master.findUniqueOrThrow({
+      where: { id: masterId },
+      include: {
+        workingHours: true,
+        breaks: true,
+        services: { where: { service: { isActive: true } }, include: { service: true } },
+      },
+    });
+    const weekday = Temporal.PlainDate.from(date).dayOfWeek;
+    const from = startOfDay(date, config.timezone);
+    const to = startOfDay(
+      Temporal.PlainDate.from(date).add({ days: 1 }).toString(),
+      config.timezone,
+    );
+    const at = (time: string) => localInstant(date, time, config.timezone).toISOString();
+    const hours = master.workingHours.find((w) => w.weekday === weekday);
+    const services = master.services
+      .map((s) => s.service)
+      .sort((a, b) => +a.createdAt - +b.createdAt);
+    // Start times where each service fits, with the master's walk-in notice rule.
+    const fits = Object.fromEntries(
+      await Promise.all(
+        services.map(async (s) => [
+          s.id,
+          (
+            await this.booking.availability(this.db, s.id, masterId, date, new Date(+now - 3600000))
+          ).slots.map((slot) => slot.startsAt),
+        ]),
+      ),
+    ) as Record<string, string[]>;
+    const [timeOffs, appointments] = await Promise.all([
+      this.db.timeOff.findMany({
+        where: { masterId, startsAt: { lt: to }, endsAt: { gt: from } },
+        orderBy: { startsAt: 'asc' },
+      }),
+      this.db.appointment.findMany({
+        where: { masterId, ...activeAt(now), startsAt: { gte: from, lt: to } },
+        include: appointmentInclude,
+        orderBy: { startsAt: 'asc' },
+      }),
+    ]);
+    return {
+      date,
+      now: now.toISOString(),
+      masters,
+      master: { id: master.id, name: master.name },
+      services,
+      fits,
+      hours: hours
+        ? {
+            start: hours.startTime,
+            end: hours.endTime,
+            startsAt: at(hours.startTime),
+            endsAt: at(hours.endTime),
+          }
+        : null,
+      breaks: master.breaks
+        .filter((b) => b.weekday === weekday)
+        .map((b) => ({
+          start: b.startTime,
+          end: b.endTime,
+          startsAt: at(b.startTime),
+          endsAt: at(b.endTime),
+        })),
+      timeOffs,
+      appointments,
+    };
+  }
+  @Get('pending')
+  @ApiOperation({ summary: 'Заявки с сайта, ожидающие подтверждения мастера' })
+  pending() {
+    return this.db.appointment.findMany({
+      where: { status: 'PENDING', holdUntil: { gt: new Date() } },
+      include: appointmentInclude,
+      orderBy: { startsAt: 'asc' },
+    });
+  }
+  @Patch('appointments/:id/confirm')
+  @ApiOperation({ summary: 'Подтвердить заявку с сайта' })
+  confirm(@Param('id', ParseUUIDPipe) id: string, @Req() req: AuthRequest) {
+    return this.booking.change(id, req.actor, 'confirm');
+  }
   @Patch('appointments/:id/cancel') @ApiOperation({ summary: 'Отменить будущую запись' }) cancel(
     @Param('id', ParseUUIDPipe) id: string,
     @Req() req: AuthRequest,
@@ -254,6 +366,6 @@ export class AdminController {
   @Patch('appointments/:id/complete')
   @ApiOperation({ summary: 'Завершить подтверждённое посещение после endsAt' })
   complete(@Param('id', ParseUUIDPipe) id: string, @Req() req: AuthRequest) {
-    return this.booking.change(id, req.actor, true);
+    return this.booking.change(id, req.actor, 'complete');
   }
 }

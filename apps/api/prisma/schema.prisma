@@ -10,6 +10,7 @@ enum Role {
   ADMIN
 }
 enum AppointmentStatus {
+  PENDING
   CONFIRMED
   CANCELLED
   COMPLETED
@@ -100,7 +101,10 @@ model TimeOff {
 }
 model Appointment {
   id String @id @default(uuid()) @db.Uuid
-  customerId String @db.Uuid
+  customerId String? @db.Uuid
+  guestName String?
+  guestPhone String?
+  holdUntil DateTime? @db.Timestamptz(3)
   masterId String @db.Uuid
   serviceId String @db.Uuid
   startsAt DateTime @db.Timestamptz(3)
@@ -115,7 +119,7 @@ model Appointment {
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
   cancelledAt DateTime? @db.Timestamptz(3)
   cancelledById String? @db.Uuid
-  customer User @relation("Customer",fields:[customerId],references:[id])
+  customer User? @relation("Customer",fields:[customerId],references:[id],onDelete:Restrict)
   cancelledBy User? @relation("Canceller",fields:[cancelledById],references:[id])
   master Master @relation(fields:[masterId],references:[id])
   service Service @relation(fields:[serviceId],references:[id])

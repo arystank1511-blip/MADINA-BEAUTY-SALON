@@ -29,6 +29,7 @@ export function Book({ config, admin = false }: { config: Config; admin?: boolea
     [success, setSuccess] = useState<Appointment | null>(null),
     [customer, setCustomer] = useState(''),
     [guestName, setGuestName] = useState(''),
+    [guestPhone, setGuestPhone] = useState(''),
     [sent, setSent] = useState(false);
   const [customerPage, setCustomerPage] = useState(1);
   const serviceId = params.get('service') || '',
@@ -137,16 +138,28 @@ export function Book({ config, admin = false }: { config: Config; admin?: boolea
   ]
     .filter(Boolean)
     .join('\n');
-  function notifySalon() {
-    setSent(true);
-    // Telegram notification is best effort: WhatsApp opens even if it fails.
-    void send('/booking-requests', 'POST', {
-      serviceId,
-      ...(masterId ? { masterId } : {}),
-      ...(time ? { startsAt: time } : {}),
-      ...(guestName.trim() ? { name: guestName.trim() } : {}),
-    }).catch(() => undefined);
-  }
+  // The request holds the slot for the master; WhatsApp is how the client confirms it.
+  const request = useMutation({
+    mutationFn: () =>
+      send('/booking-requests', 'POST', {
+        serviceId,
+        masterId,
+        startsAt: time,
+        name: guestName.trim(),
+        ...(guestPhone.trim() ? { phone: guestPhone.trim() } : {}),
+      }),
+    onSuccess: () => {
+      setSent(true);
+      void client.invalidateQueries({ queryKey: ['availability'] });
+    },
+    onError: (e) => {
+      setError(e);
+      if (e instanceof ApiError && e.status === 409) {
+        change({ time: undefined, step: '3' });
+        void availability.refetch();
+      }
+    },
+  });
   const summary = (
     <>
       <p className="eyebrow">ВАША ЗАПИСЬ</p>
@@ -186,18 +199,18 @@ export function Book({ config, admin = false }: { config: Config; admin?: boolea
         <span className="success-icon whatsapp-success">
           <WhatsAppIcon size={34} />
         </span>
-        <p className="eyebrow">ПОЧТИ ГОТОВО</p>
-        <h1>Отправьте сообщение.</h1>
+        <p className="eyebrow">ВРЕМЯ ЗАБРОНИРОВАНО</p>
+        <h1>Остался один шаг.</h1>
         <p className="page-intro">
-          Мы открыли WhatsApp с готовым текстом заявки. Отправьте его — мастер подтвердит время в
-          ответ.
-          <br />
           {service?.name}
           {time && ` · ${dateLabel(time, config.timezone)}, ${timeLabel(time, config.timezone)}`}
+          <br />
+          Мы держим это время для вас 3 часа. Отправьте сообщение в WhatsApp — мастер подтвердит
+          запись в ответ.
         </p>
         <div className="form-actions">
           <WhatsAppLink config={config} text={whatsappText}>
-            Открыть WhatsApp ещё раз
+            Отправить в WhatsApp
           </WhatsAppLink>
           <ButtonLink to="/" secondary>
             На главную
@@ -446,23 +459,48 @@ export function Book({ config, admin = false }: { config: Config; admin?: boolea
               )}
               {!admin ? (
                 <div className="login-prompt whatsapp-prompt">
-                  <h3>Подтвердим в WhatsApp</h3>
+                  <h3>Как к вам обращаться?</h3>
                   <p>
-                    Нажмите кнопку — откроется чат салона с готовым сообщением. Регистрация не
-                    нужна.
+                    Мы придержим это время, а подтвердим запись в WhatsApp. Регистрация не нужна.
                   </p>
-                  <label>
-                    Ваше имя (необязательно)
-                    <input
-                      autoComplete="given-name"
-                      maxLength={80}
-                      value={guestName}
-                      onChange={(e) => setGuestName(e.target.value)}
-                    />
-                  </label>
-                  <WhatsAppLink config={config} text={whatsappText} onClick={notifySalon}>
-                    Записаться через WhatsApp
-                  </WhatsAppLink>
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      setError(null);
+                      request.mutate();
+                    }}
+                  >
+                    <label>
+                      Ваше имя
+                      <input
+                        autoComplete="given-name"
+                        required
+                        minLength={2}
+                        maxLength={80}
+                        value={guestName}
+                        onChange={(e) => setGuestName(e.target.value)}
+                      />
+                    </label>
+                    <label>
+                      Телефон (необязательно)
+                      <input
+                        type="tel"
+                        autoComplete="tel"
+                        inputMode="tel"
+                        maxLength={30}
+                        pattern="[+0-9\s()\-]*"
+                        value={guestPhone}
+                        onChange={(e) => setGuestPhone(e.target.value)}
+                      />
+                    </label>
+                    <button
+                      className="button whatsapp"
+                      disabled={!time || !master || !service || request.isPending}
+                    >
+                      <WhatsAppIcon />
+                      {request.isPending ? 'Бронируем…' : 'Записаться'}
+                    </button>
+                  </form>
                 </div>
               ) : (
                 <>
