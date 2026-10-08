@@ -429,7 +429,7 @@ function Remind({ a, config }: { a: Appointment; config: Config }) {
     `Здравствуйте${a.guestName ? ', ' + a.guestName : ''}!`,
     `Напоминаю, вы записаны ${when} в ${timeLabel(a.startsAt, config.timezone)} — ${a.serviceName}.`,
     `Салон «${config.name}», ${config.address}.`,
-    'Если планы изменятся, напишите, пожалуйста 🙏',
+    'Если планы изменятся, напишите, пожалуйста. Спасибо!',
   ].join('\n');
   return (
     <a
