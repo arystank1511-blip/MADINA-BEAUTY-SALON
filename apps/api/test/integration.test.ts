@@ -429,6 +429,50 @@ describe.sequential('real PostgreSQL, HTTP and independent Nest instances', () =
     ).toBe(true);
     expect(body.fits[service]).not.toContain(at('20:00'));
   });
+  it('marks missed visits and counts them per phone in the day view', async () => {
+    const past = new Date(Date.now() - 2 * 3600000);
+    past.setUTCSeconds(0, 0);
+    const missed = await db.appointment.create({
+      data: {
+        guestName: 'Пропускающая',
+        guestPhone: '8 (777) 555-44-33',
+        masterId: master,
+        serviceId: service,
+        startsAt: past,
+        endsAt: new Date(+past + 30 * 60000),
+        occupiedUntil: new Date(+past + 30 * 60000),
+        serviceName: 'Тест',
+        priceMinor: 0,
+        durationMinutes: 30,
+        bufferAfterMinutes: 0,
+      },
+    });
+    const mark = (id: string) => call(`/admin/appointments/${id}/no-show`, 'PATCH', {}, admin);
+    expect((await call(`/admin/appointments/${missed.id}/no-show`, 'PATCH', {}, c1)).status).toBe(
+      403,
+    );
+    expect((await mark(missed.id)).body.status).toBe('NO_SHOW');
+    expect((await mark(missed.id)).status).toBe(200);
+    const next = Temporal.PlainDate.from(date).add({ days: 2 }).toString();
+    const future = await call(
+      '/admin/quick-appointments',
+      'POST',
+      {
+        serviceId: service,
+        masterId: master,
+        startsAt: localInstant(next, '12:00', 'Asia/Almaty').toISOString(),
+        guestName: 'Пропускающая',
+        guestPhone: '+7 777 555 44 33',
+      },
+      admin,
+    );
+    expect(future.status).toBe(201);
+    expect((await mark(future.body.id)).status).toBe(409);
+    const day = await call(`/admin/day?date=${next}&masterId=${master}`, 'GET', undefined, admin);
+    expect((day.body as unknown as { noShows: Record<string, number> }).noShows['7775554433']).toBe(
+      1,
+    );
+  });
   it('rate limits abusive client without blocking another behind the trusted proxy', async () => {
     const attempt = async (ip: string) =>
       fetch(urls[0] + '/api/v1/auth/login', {

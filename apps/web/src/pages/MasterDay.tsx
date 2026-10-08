@@ -33,6 +33,8 @@ interface Day {
   hours: Span | null;
   breaks: Span[];
   timeOffs: { id: string; startsAt: string; endsAt: string; reason: string }[];
+  /** Missed visits per phone key (last 10 digits). */
+  noShows: Record<string, number>;
   appointments: Appointment[];
 }
 type Row =
@@ -43,7 +45,25 @@ type Row =
 
 const STEP = 30 * 60000;
 const overlaps = (a: number, b: number, c: number, d: number) => a < d && b > c;
-const digits = (phone: string) => phone.replace(/\D/g, '');
+/** Kazakhstan number in international form (7XXXXXXXXXX) for tel: and wa.me links, or ''. */
+const intl = (phone: string) => {
+  const d = phone.replace(/\D/g, '');
+  if (d.length === 10) return '7' + d;
+  if (d.length === 11 && d.startsWith('8')) return '7' + d.slice(1);
+  return d.length >= 11 ? d : '';
+};
+const phoneKey = (phone: string | null) => {
+  const d = (phone || '').replace(/\D/g, '');
+  return d.length >= 10 ? d.slice(-10) : '';
+};
+/** Salon-local calendar date (YYYY-MM-DD) of an instant. */
+const dayOf = (iso: string, zone: string) =>
+  new Intl.DateTimeFormat('en-CA', {
+    timeZone: zone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date(iso));
 const weekday = (date: string) =>
   new Intl.DateTimeFormat('ru-RU', { weekday: 'long', timeZone: 'UTC' }).format(
     new Date(date + 'T12:00:00Z'),
@@ -82,6 +102,7 @@ export function MasterDay({ config }: { config: Config }) {
   const [date, setDate] = useState(today);
   const [adding, setAdding] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState<Appointment | null>(null);
+  const [missing, setMissing] = useState<Appointment | null>(null);
   const client = useQueryClient();
   const day = useQuery({
     queryKey: ['day', date],
@@ -100,10 +121,11 @@ export function MasterDay({ config }: { config: Config }) {
     void client.invalidateQueries({ queryKey: ['availability'] });
   };
   const decide = useMutation({
-    mutationFn: ({ id, action }: { id: string; action: 'confirm' | 'cancel' }) =>
+    mutationFn: ({ id, action }: { id: string; action: 'confirm' | 'cancel' | 'no-show' }) =>
       send(`/admin/appointments/${id}/${action}`, 'PATCH'),
     onSuccess: () => {
       setCancelling(null);
+      setMissing(null);
       refresh();
     },
     onError: refresh,
@@ -159,7 +181,7 @@ export function MasterDay({ config }: { config: Config }) {
         <button
           className="md-arrow"
           aria-label="Предыдущий день"
-          disabled={date <= today}
+          disabled={date <= addDays(today, -7)}
           onClick={() => setDate(addDays(date, -1))}
         >
           <ChevronLeft />
@@ -190,7 +212,7 @@ export function MasterDay({ config }: { config: Config }) {
           📅 Дата
           <input
             type="date"
-            min={today}
+            min={addDays(today, -7)}
             max={addDays(today, 59)}
             value={date}
             onChange={(e) => e.target.value && setDate(e.target.value)}
@@ -227,7 +249,11 @@ export function MasterDay({ config }: { config: Config }) {
               ) : r.kind === 'visit' ? (
                 <li key={r.visit.id}>
                   <article className={`md-card ${r.visit.status.toLowerCase()}`}>
-                    <Visit a={r.visit} config={config} />
+                    <Visit
+                      a={r.visit}
+                      config={config}
+                      missed={day.data.noShows[phoneKey(r.visit.guestPhone)] || 0}
+                    />
                     {r.visit.status === 'PENDING' ? (
                       <div className="md-actions">
                         <button
@@ -243,13 +269,20 @@ export function MasterDay({ config }: { config: Config }) {
                       </div>
                     ) : (
                       r.visit.status === 'CONFIRMED' &&
-                      Date.parse(r.visit.startsAt) > Date.now() && (
+                      (Date.parse(r.visit.startsAt) > Date.now() ? (
                         <div className="md-actions">
+                          <Remind a={r.visit} config={config} />
                           <button className="md-btn ghost" onClick={() => setCancelling(r.visit)}>
                             Отменить запись
                           </button>
                         </div>
-                      )
+                      ) : (
+                        <div className="md-actions">
+                          <button className="md-btn ghost" onClick={() => setMissing(r.visit)}>
+                            ✕ Не пришёл
+                          </button>
+                        </div>
+                      ))
                     )}
                   </article>
                 </li>
@@ -284,6 +317,30 @@ export function MasterDay({ config }: { config: Config }) {
           }}
         />
       )}
+      {missing && (
+        <Modal title="Клиент не пришёл?" onClose={() => !decide.isPending && setMissing(null)}>
+          <p className="md-confirm-text">
+            {clientName(missing)} · {missing.serviceName}
+            <br />
+            {dateLabel(missing.startsAt, config.timezone)}, {time(missing.startsAt)}
+          </p>
+          <p className="caption">
+            Отметка сохранится. Если клиент запишется снова, вы увидите, что он уже пропускал.
+          </p>
+          <div className="md-actions">
+            <button
+              className="md-btn no"
+              disabled={decide.isPending}
+              onClick={() => decide.mutate({ id: missing.id, action: 'no-show' })}
+            >
+              Да, не пришёл
+            </button>
+            <button className="md-btn ghost" onClick={() => setMissing(null)}>
+              Нет
+            </button>
+          </div>
+        </Modal>
+      )}
       {cancelling && (
         <Modal
           title={cancelling.status === 'PENDING' ? 'Отказать в заявке?' : 'Отменить запись?'}
@@ -313,8 +370,18 @@ export function MasterDay({ config }: { config: Config }) {
   );
 }
 
-function Visit({ a, config, withDate }: { a: Appointment; config: Config; withDate?: boolean }) {
-  const phone = a.guestPhone || '';
+function Visit({
+  a,
+  config,
+  withDate,
+  missed = 0,
+}: {
+  a: Appointment;
+  config: Config;
+  withDate?: boolean;
+  missed?: number;
+}) {
+  const phone = intl(a.guestPhone || '');
   return (
     <>
       <div className="md-visit-time">
@@ -322,20 +389,57 @@ function Visit({ a, config, withDate }: { a: Appointment; config: Config; withDa
         {withDate && `${dateLabel(a.startsAt, config.timezone)}, `}
         {timeLabel(a.startsAt, config.timezone)}–{timeLabel(a.endsAt, config.timezone)}
         {a.status === 'PENDING' && <span className="md-badge">ждёт ответа</span>}
+        {a.status === 'NO_SHOW' && <span className="md-badge gray">не пришёл</span>}
       </div>
       <h3>{clientName(a)}</h3>
       <p>{a.serviceName}</p>
-      {digits(phone).length >= 10 && (
+      {missed > 0 && a.status !== 'NO_SHOW' && (
+        <p className="md-warn">
+          ⚠ Уже не приходил(а): {missed} {missed === 1 ? 'раз' : missed < 5 ? 'раза' : 'раз'}.
+          Напомните накануне.
+        </p>
+      )}
+      {phone && (
         <div className="md-contacts">
-          <a href={`tel:+${digits(phone)}`}>
+          <a href={`tel:+${phone}`}>
             <Phone size={18} /> Позвонить
           </a>
-          <a href={`https://wa.me/${digits(phone)}`} target="_blank" rel="noopener noreferrer">
+          <a href={`https://wa.me/${phone}`} target="_blank" rel="noopener noreferrer">
             <WhatsAppIcon size={18} /> WhatsApp
           </a>
         </div>
       )}
     </>
+  );
+}
+
+/** Opens the client's WhatsApp with a ready reminder; the master only taps «Отправить». */
+function Remind({ a, config }: { a: Appointment; config: Config }) {
+  const phone = intl(a.guestPhone || '');
+  if (!phone) return null;
+  const today = todayIn(config.timezone);
+  const day = dateLabel(a.startsAt, config.timezone).replace(/ \d{4} г\.$/, '');
+  const when =
+    dayOf(a.startsAt, config.timezone) === today
+      ? 'сегодня'
+      : dayOf(a.startsAt, config.timezone) === addDays(today, 1)
+        ? 'завтра'
+        : day;
+  const text = [
+    `Здравствуйте${a.guestName ? ', ' + a.guestName : ''}!`,
+    `Напоминаю, вы записаны ${when} в ${timeLabel(a.startsAt, config.timezone)} — ${a.serviceName}.`,
+    `Салон «${config.name}», ${config.address}.`,
+    'Если планы изменятся, напишите, пожалуйста 🙏',
+  ].join('\n');
+  return (
+    <a
+      className="md-btn remind"
+      href={`https://wa.me/${phone}?text=${encodeURIComponent(text)}`}
+      target="_blank"
+      rel="noopener noreferrer"
+    >
+      <WhatsAppIcon size={20} /> Напомнить
+    </a>
   );
 }
 

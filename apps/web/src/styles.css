@@ -2467,6 +2467,40 @@ header {
   font-size: 20px;
   color: var(--text);
 }
+.badge.no_show {
+  background: #2a2a2a;
+  color: #bdbdbd;
+}
+.md-card.no_show {
+  opacity: 0.55;
+  border-left-color: #666;
+}
+.md-badge.gray {
+  background: #555;
+  color: #fff;
+}
+.md-warn {
+  margin-top: 8px !important;
+  padding: 8px 10px;
+  background: #3a2e00;
+  color: #ffd75e !important;
+  font-size: 15px !important;
+}
+.md-btn.remind {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: var(--whatsapp);
+  color: #062b14;
+  text-decoration: none;
+}
+.md-btn.remind {
+  flex-basis: 100%;
+}
+.md-btn.remind:hover {
+  background: #3be07a;
+}
 .badge.pending {
   background: #3a2e00;
   color: #ffd75e;

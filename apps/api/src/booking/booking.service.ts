@@ -152,7 +152,11 @@ export class BookingService {
       fail(404, 'NOT_FOUND', 'Запись не найдена.');
     return a;
   }
-  async change(id: string, actor: Actor, action: 'cancel' | 'complete' | 'confirm' = 'cancel') {
+  async change(
+    id: string,
+    actor: Actor,
+    action: 'cancel' | 'complete' | 'confirm' | 'noShow' = 'cancel',
+  ) {
     const initial = await this.get(id, actor);
     return this.db.$transaction(
       async (tx) => {
@@ -166,6 +170,17 @@ export class BookingService {
           return tx.appointment.update({
             where: { id },
             data: { status: 'CONFIRMED', holdUntil: null },
+            include: appointmentInclude,
+          });
+        }
+        if (action === 'noShow') {
+          if (actor.role !== 'ADMIN') fail(403, 'FORBIDDEN', 'Доступ запрещён.');
+          if (a.status === 'NO_SHOW') return a;
+          if (a.status !== 'CONFIRMED' || a.startsAt > new Date())
+            fail(409, 'INVALID_STATUS', 'Отметить «не пришёл» можно только после начала записи.');
+          return tx.appointment.update({
+            where: { id },
+            data: { status: 'NO_SHOW' },
             include: appointmentInclude,
           });
         }

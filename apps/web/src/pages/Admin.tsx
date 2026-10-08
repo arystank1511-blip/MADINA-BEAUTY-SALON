@@ -25,6 +25,7 @@ export const statusNames = {
   CONFIRMED: 'Подтверждена',
   CANCELLED: 'Отменена',
   COMPLETED: 'Завершена',
+  NO_SHOW: 'Не пришёл',
 };
 const days = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота', 'Воскресенье'];
 const fd = (e: FormEvent<HTMLFormElement>) => {
