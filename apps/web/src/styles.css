@@ -2619,6 +2619,18 @@ header {
   .brand-panel-tags {
     display: none;
   }
+  .md-free {
+    gap: 10px;
+    padding: 10px 12px;
+  }
+  .md-time {
+    min-width: 58px;
+    font-size: 20px;
+  }
+  .md-add {
+    padding: 10px 12px;
+    font-size: 16px;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
   *,
