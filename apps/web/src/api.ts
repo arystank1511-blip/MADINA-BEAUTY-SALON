@@ -47,7 +47,7 @@ export interface Appointment {
   startsAt: string;
   endsAt: string;
   occupiedUntil: string;
-  status: 'PENDING' | 'CONFIRMED' | 'CANCELLED' | 'COMPLETED';
+  status: 'PENDING' | 'CONFIRMED' | 'CANCELLED' | 'COMPLETED' | 'NO_SHOW';
   master: { id: string; name: string };
   customer: User | null;
 }

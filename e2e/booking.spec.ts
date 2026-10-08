@@ -218,8 +218,11 @@ test('master day: book a walk-in, confirm a site request, cancel', async ({ page
   await expect(card).toBeVisible();
   await expect(card.getByRole('link', { name: /Позвонить/ })).toHaveAttribute(
     'href',
-    'tel:+87772223344',
+    'tel:+77772223344',
   );
+  const remind = await card.getByRole('link', { name: /Напомнить/ }).getAttribute('href');
+  expect(remind?.startsWith('https://wa.me/77772223344?text=')).toBe(true);
+  expect(decodeURIComponent(remind!.split('?text=')[1])).toContain('завтра');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   // A request from the site appears at the top and is confirmed with one tap.
   const day = await page.request.get(

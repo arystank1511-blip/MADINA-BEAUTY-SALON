@@ -34,6 +34,11 @@ import { config } from '../config';
 import { fail } from '../errors';
 import { fitsSchedule, localInstant, salonDate, startOfDay } from '../availability/rules';
 import { Temporal } from '@js-temporal/polyfill';
+/** Comparable phone key: the last 10 digits, so +7 777…, 8 777… and 777… match. */
+export const phoneKey = (phone: string | null | undefined) => {
+  const digits = (phone || '').replace(/\D/g, '');
+  return digits.length >= 10 ? digits.slice(-10) : '';
+};
 @ApiTags('Администрирование')
 @ApiCookieAuth()
 @Admin()
@@ -316,9 +321,25 @@ export class AdminController {
         orderBy: { startsAt: 'asc' },
       }),
     ]);
+    // Past no-shows per phone (last 10 digits), so the master sees unreliable clients.
+    const phones = [
+      ...new Set(appointments.map((a) => phoneKey(a.guestPhone)).filter(Boolean)),
+    ] as string[];
+    const missed = phones.length
+      ? await this.db.appointment.findMany({
+          where: { status: 'NO_SHOW', guestPhone: { not: null } },
+          select: { guestPhone: true },
+        })
+      : [];
+    const noShows: Record<string, number> = {};
+    for (const m of missed) {
+      const key = phoneKey(m.guestPhone);
+      if (key && phones.includes(key)) noShows[key] = (noShows[key] || 0) + 1;
+    }
     return {
       date,
       now: now.toISOString(),
+      noShows,
       masters,
       master: { id: master.id, name: master.name },
       services,
@@ -362,6 +383,11 @@ export class AdminController {
     @Req() req: AuthRequest,
   ) {
     return this.booking.change(id, req.actor);
+  }
+  @Patch('appointments/:id/no-show')
+  @ApiOperation({ summary: 'Клиент не пришёл: отметка для начавшейся подтверждённой записи' })
+  noShow(@Param('id', ParseUUIDPipe) id: string, @Req() req: AuthRequest) {
+    return this.booking.change(id, req.actor, 'noShow');
   }
   @Patch('appointments/:id/complete')
   @ApiOperation({ summary: 'Завершить подтверждённое посещение после endsAt' })

@@ -159,8 +159,8 @@ export class ListDto {
   @ApiProperty({ required: false }) @IsOptional() @IsUUID() masterId?: string;
   @ApiProperty({ required: false })
   @IsOptional()
-  @IsIn(['PENDING', 'CONFIRMED', 'CANCELLED', 'COMPLETED'])
-  status?: 'PENDING' | 'CONFIRMED' | 'CANCELLED' | 'COMPLETED';
+  @IsIn(['PENDING', 'CONFIRMED', 'CANCELLED', 'COMPLETED', 'NO_SHOW'])
+  status?: 'PENDING' | 'CONFIRMED' | 'CANCELLED' | 'COMPLETED' | 'NO_SHOW';
   @ApiProperty({ required: false })
   @IsOptional()
   @IsDateString({ strict: true })
