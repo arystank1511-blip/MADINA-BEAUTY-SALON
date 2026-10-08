@@ -9,8 +9,10 @@ import {
   Appointment,
   Config,
   dateLabel,
+  byCategory,
   money,
   Page,
+  price,
   send,
   Slot,
   timeLabel,
@@ -131,7 +133,8 @@ export function Book({ config, admin = false }: { config: Config; admin?: boolea
   });
   const whatsappText = [
     `Здравствуйте! Хочу записаться в салон «${config.name}».`,
-    service && `Услуга: ${service.name} (${money(service.priceMinor, config.currency)})`,
+    service &&
+      `Услуга: ${service.name}${service.category ? `, ${service.category.toLowerCase()}` : ''} (${price(service, config.currency)})`,
     master && `Мастер: ${master.name}`,
     time && `Время: ${dateLabel(time, config.timezone)}, ${timeLabel(time, config.timezone)}`,
     guestName.trim() && `Меня зовут ${guestName.trim()}.`,
@@ -184,7 +187,7 @@ export function Book({ config, admin = false }: { config: Config; admin?: boolea
       </dl>
       <div className="total">
         <span>Итого</span>
-        <strong>{service ? money(service.priceMinor, config.currency) : '—'}</strong>
+        <strong>{service ? price(service, config.currency) : '—'}</strong>
       </div>
       <p className="caption">
         Все часы указаны по времени салона:
@@ -289,38 +292,41 @@ export function Book({ config, admin = false }: { config: Config; admin?: boolea
                     </button>
                   </p>
                 )}
-                <div className="choice-list">
-                  {availableServices.map((s) => (
-                    <button
-                      className={`choice ${serviceId === s.id ? 'selected' : ''}`}
-                      key={s.id}
-                      onClick={() => {
-                        setError(null);
-                        // With a single master for this service the choice is obvious: skip it.
-                        const only = masters.data?.filter((m) =>
-                          m.services.some((ms) => ms.serviceId === s.id),
-                        );
-                        const preset = pinned || (only?.length === 1 ? only[0].id : undefined);
-                        change({
-                          service: s.id,
-                          master: preset,
-                          time: undefined,
-                          step: preset ? '3' : '2',
-                        });
-                      }}
-                    >
-                      <div>
-                        <h3>{s.name}</h3>
-                        <p>{s.description}</p>
-                        <span>{s.durationMinutes} мин</span>
-                      </div>
-                      <strong>
-                        {money(s.priceMinor, config.currency)}
-                        {serviceId === s.id ? <Check size={18} /> : <Arrow />}
-                      </strong>
-                    </button>
-                  ))}
-                </div>
+                {byCategory(availableServices).map((group) => (
+                  <div className="choice-list" key={group.category}>
+                    {group.category && <h3 className="choice-group-title">{group.category}</h3>}
+                    {group.items.map((s) => (
+                      <button
+                        className={`choice ${serviceId === s.id ? 'selected' : ''}`}
+                        key={s.id}
+                        onClick={() => {
+                          setError(null);
+                          // With a single master for this service the choice is obvious: skip it.
+                          const only = masters.data?.filter((m) =>
+                            m.services.some((ms) => ms.serviceId === s.id),
+                          );
+                          const preset = pinned || (only?.length === 1 ? only[0].id : undefined);
+                          change({
+                            service: s.id,
+                            master: preset,
+                            time: undefined,
+                            step: preset ? '3' : '2',
+                          });
+                        }}
+                      >
+                        <div>
+                          <h3>{s.name}</h3>
+                          {s.description && <p>{s.description}</p>}
+                          <span>{s.durationMinutes} мин</span>
+                        </div>
+                        <strong>
+                          {price(s, config.currency)}
+                          {serviceId === s.id ? <Check size={18} /> : <Arrow />}
+                        </strong>
+                      </button>
+                    ))}
+                  </div>
+                ))}
               </>
             ))}
           {step === 2 &&
@@ -425,7 +431,7 @@ export function Book({ config, admin = false }: { config: Config; admin?: boolea
                     ? `${dateLabel(time, config.timezone)} · ${timeLabel(time, config.timezone)}`
                     : 'Выберите время на предыдущем шаге.'}
                 </p>
-                <strong>{service && money(service.priceMinor, config.currency)}</strong>
+                <strong>{service && price(service, config.currency)}</strong>
               </div>
               {admin && (
                 <>
@@ -528,7 +534,7 @@ export function Book({ config, admin = false }: { config: Config; admin?: boolea
         <aside className="booking-summary">
           <div className="desktop-summary">{summary}</div>
           <details className="mobile-summary">
-            <summary>Детали записи {service && money(service.priceMinor, config.currency)}</summary>
+            <summary>Детали записи {service && price(service, config.currency)}</summary>
             {summary}
           </details>
         </aside>

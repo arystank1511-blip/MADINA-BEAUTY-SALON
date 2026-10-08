@@ -405,6 +405,21 @@ header {
 .service-row:hover {
   background: var(--surface);
 }
+.service-group + .service-group {
+  margin-top: 44px;
+}
+.service-group-title,
+.choice-group-title {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin: 0 0 14px;
+}
+.choice-list + .choice-list {
+  margin-top: 32px;
+}
 .row-number {
   font-size: 12px;
   color: var(--muted);

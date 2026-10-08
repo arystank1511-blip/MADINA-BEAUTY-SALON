@@ -100,7 +100,8 @@ export class AdminController {
       fail(400, 'INVALID_WINDOW', 'Начало должно быть раньше окончания, в пределах одного дня.');
   }
   @Get('services') @ApiOperation({ summary: 'Все услуги, включая неактивные' }) services() {
-    return this.db.service.findMany({ orderBy: { createdAt: 'asc' } });
+    // Active services first, in price-list order; hidden ones stay at the bottom.
+    return this.db.service.findMany({ orderBy: [{ isActive: 'desc' }, { createdAt: 'asc' }] });
   }
   @Post('services') @ApiOperation({ summary: 'Добавить услугу' }) serviceCreate(
     @Body() b: ServiceDto,

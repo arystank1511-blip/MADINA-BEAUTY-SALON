@@ -275,9 +275,11 @@ function Services({ config }: { config: Config }) {
   function submit(e: FormEvent<HTMLFormElement>) {
     const f = fd(e);
     mutation.mutate({
+      category: String(f.get('category')).trim(),
       name: String(f.get('name')),
       description: String(f.get('description')),
       priceMinor: Math.round(Number(f.get('price')) * 100),
+      priceFrom: f.get('priceFrom') === 'on',
       durationMinutes: Number(f.get('duration')),
       bufferAfterMinutes: Number(f.get('buffer')),
       isActive: f.get('active') === 'on',
@@ -311,6 +313,7 @@ function Services({ config }: { config: Config }) {
           <table>
             <thead>
               <tr>
+                <th>Зал</th>
                 <th>Название</th>
                 <th>Цена</th>
                 <th>Время</th>
@@ -322,6 +325,7 @@ function Services({ config }: { config: Config }) {
             <tbody>
               {query.data?.map((s) => (
                 <tr key={s.id}>
+                  <td>{s.category || '—'}</td>
                   <td>{s.name}</td>
                   <td>
                     <PriceEditor service={s} config={config} />
@@ -351,6 +355,19 @@ function Services({ config }: { config: Config }) {
           onClose={() => !mutation.isPending && setEdit(undefined)}
         >
           <form onSubmit={submit}>
+            <label>
+              Зал
+              <input
+                name="category"
+                maxLength={60}
+                list="service-categories"
+                defaultValue={edit?.category ?? 'Женский зал'}
+              />
+              <datalist id="service-categories">
+                <option value="Мужской зал" />
+                <option value="Женский зал" />
+              </datalist>
+            </label>
             <label>
               Название
               <input name="name" required minLength={2} maxLength={150} defaultValue={edit?.name} />
@@ -398,6 +415,10 @@ function Services({ config }: { config: Config }) {
             <label className="checkbox">
               <input type="checkbox" name="active" defaultChecked={edit?.isActive ?? true} />{' '}
               Доступна для записи
+            </label>
+            <label className="checkbox">
+              <input type="checkbox" name="priceFrom" defaultChecked={edit?.priceFrom ?? true} />{' '}
+              Цена «от» (минимальная)
             </label>
             {mutation.error && <ErrorBox error={mutation.error} />}
             <button className="button" disabled={mutation.isPending}>

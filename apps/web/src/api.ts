@@ -19,9 +19,11 @@ export interface User {
 }
 export interface Service {
   id: string;
+  category: string;
   name: string;
   description: string;
   priceMinor: number;
+  priceFrom: boolean;
   durationMinutes: number;
   bufferAfterMinutes: number;
   isActive: boolean;
@@ -184,6 +186,19 @@ export function useMasters(admin = false) {
     queryKey: ['masters', admin],
     queryFn: () => api<Master[]>(admin ? '/admin/masters' : '/masters'),
   });
+}
+/** Service price as shown to clients: most prices are a minimum, «от 2 500 ₸». */
+export const price = (service: Pick<Service, 'priceMinor' | 'priceFrom'>, currency: string) =>
+  `${service.priceFrom ? 'от ' : ''}${money(service.priceMinor, currency)}`;
+/** Splits services into consecutive groups by hall, keeping their order. */
+export function byCategory<T extends Pick<Service, 'category'>>(services: T[]) {
+  const groups: { category: string; items: T[] }[] = [];
+  for (const s of services) {
+    const last = groups[groups.length - 1];
+    if (last && last.category === s.category) last.items.push(s);
+    else groups.push({ category: s.category, items: [s] });
+  }
+  return groups;
 }
 export const money = (value: number, currency: string) =>
   new Intl.NumberFormat('ru-RU', {

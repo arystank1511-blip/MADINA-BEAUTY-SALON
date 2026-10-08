@@ -83,7 +83,7 @@ export function Home({ config }: { config: Config }) {
             loading="lazy"
           />
           <p className="brand-panel-tags" aria-hidden="true">
-            Стрижки · Окрашивание · Укладка · Уход
+            Мужской зал · Женский зал · Стрижки · Покраска · Укладки
           </p>
           <span>ПРОСТРАНСТВО ДЛЯ ПЕРЕМЕН ↗</span>
         </div>

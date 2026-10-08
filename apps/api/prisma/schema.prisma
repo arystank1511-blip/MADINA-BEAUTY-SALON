@@ -40,9 +40,11 @@ model Session {
 }
 model Service {
   id String @id @default(uuid()) @db.Uuid
+  category String @default("")
   name String
   description String
   priceMinor Int
+  priceFrom Boolean @default(false)
   durationMinutes Int
   bufferAfterMinutes Int
   isActive Boolean @default(true)
