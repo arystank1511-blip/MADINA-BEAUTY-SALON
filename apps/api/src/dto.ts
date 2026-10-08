@@ -96,9 +96,18 @@ export class AvailabilityDto {
   date!: string;
 }
 export class ServiceDto {
+  @ApiProperty({ required: false, description: 'Зал, например «Женский зал»' })
+  @IsOptional()
+  @IsString()
+  @Length(0, 60)
+  category?: string;
   @ApiProperty() @IsString() @Length(2, 150) name!: string;
   @ApiProperty() @IsString() @Length(0, 2000) description!: string;
   @ApiProperty() @IsInt() @Min(0) @Max(100000000) priceMinor!: number;
+  @ApiProperty({ required: false, description: 'Показывать цену как «от …»' })
+  @IsOptional()
+  @IsBoolean()
+  priceFrom?: boolean;
   @ApiProperty() @IsInt() @Min(5) @Max(600) durationMinutes!: number;
   @ApiProperty() @IsInt() @Min(0) @Max(120) bufferAfterMinutes!: number;
   @ApiProperty() @IsBoolean() isActive!: boolean;

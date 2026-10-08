@@ -1,7 +1,7 @@
 import { ReactNode, useEffect, useRef } from 'react';
 import { ArrowUpRight, ArrowRight, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { ApiError, Config, Service, money, whatsappLink } from './api';
+import { ApiError, Config, Service, byCategory, price, whatsappLink } from './api';
 export const Arrow = () => <ArrowRight aria-hidden="true" size={18} />;
 export function ButtonLink({
   to,
@@ -125,21 +125,26 @@ export function Section({
 export function ServiceRows({ services, config }: { services: Service[]; config: Config }) {
   return (
     <div className="service-rows">
-      {services.map((s, i) => (
-        <Link className="service-row" key={s.id} to={`/book?service=${s.id}&step=2`}>
-          <span className="row-number">{String(i + 1).padStart(2, '0')}</span>
-          <div>
-            <h3>{s.name}</h3>
-            <p>{s.description}</p>
-          </div>
-          <div className="service-price">
-            <strong>{money(s.priceMinor, config.currency)}</strong>
-            <span>{s.durationMinutes} мин</span>
-          </div>
-          <span className="row-arrow" aria-label="Выбрать">
-            <ArrowUpRight aria-hidden="true" />
-          </span>
-        </Link>
+      {byCategory(services).map((group) => (
+        <div className="service-group" key={group.category}>
+          {group.category && <h3 className="service-group-title">{group.category}</h3>}
+          {group.items.map((s, i) => (
+            <Link className="service-row" key={s.id} to={`/book?service=${s.id}&step=2`}>
+              <span className="row-number">{String(i + 1).padStart(2, '0')}</span>
+              <div>
+                <h3>{s.name}</h3>
+                {s.description && <p>{s.description}</p>}
+              </div>
+              <div className="service-price">
+                <strong>{price(s, config.currency)}</strong>
+                <span>{s.durationMinutes} мин</span>
+              </div>
+              <span className="row-arrow" aria-label="Выбрать">
+                <ArrowUpRight aria-hidden="true" />
+              </span>
+            </Link>
+          ))}
+        </div>
       ))}
     </div>
   );
