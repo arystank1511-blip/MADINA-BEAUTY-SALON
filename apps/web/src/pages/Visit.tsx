@@ -30,6 +30,8 @@ interface VisitInfo {
   status: 'PENDING' | 'CONFIRMED' | 'CANCELLED' | 'COMPLETED' | 'NO_SHOW' | 'EXPIRED';
   canChange: boolean;
   changeBeforeMinutes: number;
+  /** Which visit in a row this is, when the salon runs «каждый N-й визит — подарок». */
+  loyalty: { number: number; every: number; reward: string } | null;
 }
 
 const STATUS: Record<VisitInfo['status'], string> = {
@@ -138,6 +140,20 @@ export function Visit({ config }: { config: Config }) {
         </p>
         <strong>{money(v.priceMinor, config.currency)}</strong>
       </div>
+      {v.loyalty && active && (
+        <p className="loyalty-note">
+          {v.loyalty.number % v.loyalty.every === 0
+            ? t('🎁 Это ваш {n}-й визит — {reward}!', {
+                n: v.loyalty.number,
+                reward: v.loyalty.reward,
+              })
+            : t('Это ваш {n}-й визит. Каждый {every}-й — {reward}.', {
+                n: v.loyalty.number,
+                every: v.loyalty.every,
+                reward: v.loyalty.reward,
+              })}
+        </p>
+      )}
       {(cancel.error || move.error) && <ErrorBox error={cancel.error || move.error} />}
       {active && !v.canChange && (
         <div className="empty">

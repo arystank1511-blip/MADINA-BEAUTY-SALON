@@ -20,6 +20,18 @@ export function usePromo() {
     staleTime: 5 * 60000,
   });
 }
+/** Offers the owner switched on in the admin; the site mentions no discount otherwise. */
+export function useOffers() {
+  return useQuery({
+    queryKey: ['offers'],
+    queryFn: () =>
+      api<{
+        loyalty: { every: number; reward: string } | null;
+        birthdayDiscount: number | null;
+      }>('/offers'),
+    staleTime: 5 * 60000,
+  });
+}
 export function useGallery() {
   return useQuery({ queryKey: ['gallery'], queryFn: () => api<Photo[]>('/gallery') });
 }

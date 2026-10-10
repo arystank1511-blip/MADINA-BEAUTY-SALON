@@ -50,7 +50,8 @@ export class Growth {
     return {
       reviewUrl: config.map,
       returnWeeks: 5,
-      birthdayDiscount: 10,
+      // Off until the owner sets it: the site says nothing about discounts by default.
+      birthdayDiscount: 0,
       ...((row?.value as Partial<GrowthSettings> | null) ?? {}),
     };
   }
@@ -195,7 +196,8 @@ export class Growth {
         )
           returns++;
     let birthdays = 0;
-    if (wa.birthdayTemplate)
+    // The birthday template names the discount, so it is sent only while one is set.
+    if (wa.birthdayTemplate && settings.birthdayDiscount > 0)
       for (const c of await this.clients.birthdaysToday(now)) {
         // Mark first: a greeting must never go out twice; a failure is logged by WhatsApp.
         await this.clients.greeted(c.phone, now);

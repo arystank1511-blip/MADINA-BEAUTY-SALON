@@ -24,6 +24,7 @@ import {
   ClientDto,
   ClientsQuery,
   GrowthSettingsDto,
+  LoyaltyDto,
   PaymentDto,
   StatsQuery,
   DayQuery,
@@ -53,6 +54,8 @@ import { Stats } from '../stats';
 import { Clients } from '../clients';
 import { Site } from '../site';
 import { VisitLinks, Waitlist } from '../visit';
+import { Loyalty } from '../loyalty';
+import { WeeklyReport } from '../report';
 /** Comparable phone key: the last 10 digits, so +7 777…, 8 777… and 777… match. */
 export const phoneKey = (phone: string | null | undefined) => {
   const digits = (phone || '').replace(/\D/g, '');
@@ -75,6 +78,8 @@ export class AdminController {
     private site: Site,
     private links: VisitLinks,
     private waitlist: Waitlist,
+    private loyalty: Loyalty,
+    private weekly: WeeklyReport,
   ) {}
   private async schedule<T>(id: string, mutate: (tx: Tx) => Promise<T>) {
     return this.db.$transaction(
@@ -395,6 +400,8 @@ export class AdminController {
       timeOffs,
       appointments: await this.links.withLinks(appointments),
       waitlist: await this.waitlist.list(date),
+      loyalty: await this.loyalty.active(),
+      visitNumbers: await this.loyalty.numbers(appointments),
     };
   }
   @Staff()
@@ -554,6 +561,26 @@ export class AdminController {
       })),
       returns: returns.map((a) => ({ ...a, text: this.growth.returnText(a.guestName) })),
     };
+  }
+  @Get('loyalty')
+  @ApiOperation({ summary: 'Бонусы: каждый N-й визит — подарок' })
+  loyaltySettings() {
+    return this.loyalty.settings();
+  }
+  @Put('loyalty')
+  @ApiOperation({ summary: 'Включить бонусы и задать подарок' })
+  loyaltySave(@Body() b: LoyaltyDto) {
+    return this.loyalty.save(b);
+  }
+  @Get('weekly-report')
+  @ApiOperation({ summary: 'Итоги прошлой недели (предпросмотр)' })
+  weeklyPreview() {
+    return this.weekly.build();
+  }
+  @Post('weekly-report')
+  @ApiOperation({ summary: 'Отправить итоги прошлой недели в Telegram и на телефон' })
+  weeklySend() {
+    return this.weekly.send();
   }
   @Put('growth')
   @ApiOperation({ summary: 'Ссылка на отзывы и через сколько недель приглашать снова' })

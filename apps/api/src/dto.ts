@@ -264,6 +264,22 @@ export class GrowthSettingsDto {
   @Max(100)
   birthdayDiscount!: number;
 }
+export class LoyaltyDto {
+  @ApiProperty()
+  @IsBoolean()
+  enabled!: boolean;
+  @ApiProperty({ description: 'Каждый N-й визит — подарок' })
+  @Type(() => Number)
+  @IsInt()
+  @Min(2)
+  @Max(20)
+  every!: number;
+  @ApiProperty({ example: 'скидка 50%' })
+  @Transform(({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value))
+  @IsString()
+  @Length(2, 60)
+  reward!: string;
+}
 export class PaymentDto {
   @ApiProperty({ description: 'Фактически оплачено, в минимальных единицах (тиын)' })
   @IsInt()
