@@ -2,6 +2,7 @@ import { ReactNode, useEffect, useRef } from 'react';
 import { ArrowUpRight, ArrowRight, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { ApiError, Config, Service, byCategory, price, whatsappLink } from './api';
+import { useT } from './i18n';
 export const Arrow = () => <ArrowRight aria-hidden="true" size={18} />;
 export function ButtonLink({
   to,
@@ -61,21 +62,26 @@ export function WhatsAppLink({
   );
 }
 export function WhatsAppFloat({ config }: { config: Config }) {
+  const { t } = useT();
   return (
     <a
       className="whatsapp-float"
-      href={whatsappLink(config, `Здравствуйте! Хочу записаться в салон «${config.name}».`)}
+      href={whatsappLink(
+        config,
+        t('Здравствуйте! Хочу записаться в салон «{name}».', { name: config.name }),
+      )}
       target="_blank"
       rel="noopener noreferrer"
-      aria-label="Написать в WhatsApp"
+      aria-label={t('Написать в WhatsApp')}
     >
       <WhatsAppIcon size={28} />
     </a>
   );
 }
 export function Loading() {
+  const { t } = useT();
   return (
-    <div className="skeletons" role="status" aria-label="Загрузка">
+    <div className="skeletons" role="status" aria-label={t('Загрузка')}>
       <span />
       <span />
       <span />
@@ -83,9 +89,10 @@ export function Loading() {
   );
 }
 export function ErrorBox({ error, retry }: { error: unknown; retry?: () => void }) {
+  const { t } = useT();
   return (
     <div className="error" role="alert">
-      <p>{error instanceof Error ? error.message : 'Не удалось загрузить данные.'}</p>
+      <p>{error instanceof Error ? t(error.message) : t('Не удалось загрузить данные.')}</p>
       {error instanceof ApiError && error.conflicts.length > 0 && (
         <ul>
           {error.conflicts.map((a) => (
@@ -97,7 +104,7 @@ export function ErrorBox({ error, retry }: { error: unknown; retry?: () => void 
       )}
       {retry && (
         <button type="button" className="text-button" onClick={retry}>
-          Повторить загрузку <Arrow />
+          {t('Повторить загрузку')} <Arrow />
         </button>
       )}
     </div>
@@ -123,23 +130,24 @@ export function Section({
   );
 }
 export function ServiceRows({ services, config }: { services: Service[]; config: Config }) {
+  const { t, lang } = useT();
   return (
     <div className="service-rows">
       {byCategory(services).map((group) => (
         <div className="service-group" key={group.category}>
-          {group.category && <h3 className="service-group-title">{group.category}</h3>}
+          {group.category && <h3 className="service-group-title">{t(group.category)}</h3>}
           {group.items.map((s, i) => (
             <Link className="service-row" key={s.id} to={`/book?service=${s.id}&step=2`}>
               <span className="row-number">{String(i + 1).padStart(2, '0')}</span>
               <div>
-                <h3>{s.name}</h3>
-                {s.description && <p>{s.description}</p>}
+                <h3>{t(s.name)}</h3>
+                {s.description && <p>{t(s.description)}</p>}
               </div>
               <div className="service-price">
-                <strong>{price(s, config.currency)}</strong>
-                <span>{s.durationMinutes} мин</span>
+                <strong>{price(s, config.currency, lang)}</strong>
+                <span>{t('{n} мин', { n: s.durationMinutes })}</span>
               </div>
-              <span className="row-arrow" aria-label="Выбрать">
+              <span className="row-arrow" aria-label={t('Выбрать')}>
                 <ArrowUpRight aria-hidden="true" />
               </span>
             </Link>
@@ -195,6 +203,7 @@ export function Modal({
   onClose: () => void;
   children: ReactNode;
 }) {
+  const { t } = useT();
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     const before = document.activeElement as HTMLElement;
@@ -218,7 +227,7 @@ export function Modal({
     >
       <div className="dialog-top">
         <h2 id="dialog-title">{title}</h2>
-        <button className="icon-button" aria-label="Закрыть" onClick={onClose}>
+        <button className="icon-button" aria-label={t('Закрыть')} onClick={onClose}>
           <X />
         </button>
       </div>

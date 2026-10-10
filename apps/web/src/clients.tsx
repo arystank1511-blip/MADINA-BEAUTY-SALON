@@ -3,6 +3,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, Appointment, Config, dateLabel, money, send, timeLabel, todayIn } from './api';
 import { ErrorBox, Loading, Modal, WhatsAppIcon } from './components';
 import { intl } from './remind';
+import { useT } from './i18n';
+import { kkMonths } from './i18n-kk';
 
 /** What the salon keeps about a client (by the last 10 digits of the phone). */
 export interface ClientInfo {
@@ -60,22 +62,31 @@ export function BirthdayInput({
   onChange: (value: string) => void;
   label?: string;
 }) {
+  const { t, lang } = useT();
   const [month, day] = value ? value.split('-') : ['', ''];
   const set = (m: string, d: string) => onChange(m && d ? `${m}-${d}` : '');
   return (
     <fieldset className="birthday-input">
       <legend>{label}</legend>
-      <select aria-label="День" value={day} onChange={(e) => set(month || '01', e.target.value)}>
-        <option value="">День</option>
+      <select
+        aria-label={t('День')}
+        value={day}
+        onChange={(e) => set(month || '01', e.target.value)}
+      >
+        <option value="">{t('День')}</option>
         {Array.from({ length: 31 }, (_, i) => String(i + 1).padStart(2, '0')).map((d) => (
           <option key={d} value={d}>
             {Number(d)}
           </option>
         ))}
       </select>
-      <select aria-label="Месяц" value={month} onChange={(e) => set(e.target.value, day || '01')}>
-        <option value="">Месяц</option>
-        {months.map((m, i) => (
+      <select
+        aria-label={t('Месяц')}
+        value={month}
+        onChange={(e) => set(e.target.value, day || '01')}
+      >
+        <option value="">{t('Месяц')}</option>
+        {(lang === 'kk' ? kkMonths : months).map((m, i) => (
           <option key={m} value={String(i + 1).padStart(2, '0')}>
             {m}
           </option>
@@ -83,7 +94,7 @@ export function BirthdayInput({
       </select>
       {value && (
         <button type="button" className="inline-link" onClick={() => onChange('')}>
-          Очистить
+          {t('Очистить')}
         </button>
       )}
     </fieldset>

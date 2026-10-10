@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Sparkles } from 'lucide-react';
 import { api, send } from './api';
 import { ErrorBox, Modal } from './components';
+import { useT } from './i18n';
 
 export interface Photo {
   id: string;
@@ -38,6 +39,7 @@ export function PromoBanner() {
 /** Photos of work in a grid; a tap opens the photo large. */
 export function Gallery({ photos }: { photos: Photo[] }) {
   const [open, setOpen] = useState<Photo | null>(null);
+  const { t } = useT();
   return (
     <>
       <div className="gallery-grid">
@@ -45,7 +47,7 @@ export function Gallery({ photos }: { photos: Photo[] }) {
           <button key={p.id} className="gallery-item" onClick={() => setOpen(p)}>
             <img
               src={photoUrl(p.id)}
-              alt={p.caption || 'Работа мастера'}
+              alt={p.caption || t('Работа мастера')}
               width={p.width}
               height={p.height}
               loading="lazy"
@@ -55,11 +57,11 @@ export function Gallery({ photos }: { photos: Photo[] }) {
         ))}
       </div>
       {open && (
-        <Modal title={open.caption || 'Работа мастера'} onClose={() => setOpen(null)}>
+        <Modal title={open.caption || t('Работа мастера')} onClose={() => setOpen(null)}>
           <img
             className="gallery-full"
             src={photoUrl(open.id)}
-            alt={open.caption || 'Работа мастера'}
+            alt={open.caption || t('Работа мастера')}
           />
         </Modal>
       )}

@@ -194,8 +194,15 @@ export function useMasters(admin = false) {
   });
 }
 /** Service price as shown to clients: most prices are a minimum, «от 2 500 ₸». */
-export const price = (service: Pick<Service, 'priceMinor' | 'priceFrom'>, currency: string) =>
-  `${service.priceFrom ? 'от ' : ''}${money(service.priceMinor, currency)}`;
+export const price = (
+  service: Pick<Service, 'priceMinor' | 'priceFrom'>,
+  currency: string,
+  lang: 'ru' | 'kk' = 'ru',
+) => {
+  const amount = money(service.priceMinor, currency);
+  if (!service.priceFrom) return amount;
+  return lang === 'kk' ? `${amount} бастап` : `от ${amount}`;
+};
 /** Splits services into consecutive groups by hall, keeping their order. */
 export function byCategory<T extends Pick<Service, 'category'>>(services: T[]) {
   const groups: { category: string; items: T[] }[] = [];
@@ -214,8 +221,8 @@ export const money = (value: number, currency: string) =>
     minimumFractionDigits: value % 100 === 0 ? 0 : 2,
     maximumFractionDigits: 2,
   }).format(value / 100);
-export const dateLabel = (value: string, zone: string) =>
-  new Intl.DateTimeFormat('ru-RU', {
+export const dateLabel = (value: string, zone: string, locale = 'ru-RU') =>
+  new Intl.DateTimeFormat(locale, {
     timeZone: zone,
     day: 'numeric',
     month: 'long',
