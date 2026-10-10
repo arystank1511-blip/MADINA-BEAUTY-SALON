@@ -3,8 +3,10 @@ import { Link } from 'react-router-dom';
 import {
   ArrowUpRight,
   CalendarClock,
+  Camera,
   Clock,
   Gift,
+  Star,
   MapPin,
   Phone,
   Wallet,
@@ -13,7 +15,17 @@ import {
   UserRound,
   Users,
 } from 'lucide-react';
-import { byCategory, Config, money, phoneLabel, Service, useMasters, useServices } from '../api';
+import { useQuery } from '@tanstack/react-query';
+import {
+  api,
+  byCategory,
+  Config,
+  money,
+  phoneLabel,
+  Service,
+  useMasters,
+  useServices,
+} from '../api';
 import {
   ButtonLink,
   ErrorBox,
@@ -110,6 +122,7 @@ export function Home({ config }: { config: Config }) {
         ) : (
           <HomeServices services={services.data || []} config={config} />
         )}
+        <PhotoPrice config={config} />
       </Section>
       <Section id="masters" label={t('МАСТЕР')}>
         <h2>{t('В хороших руках.')}</h2>
@@ -171,6 +184,8 @@ export function Home({ config }: { config: Config }) {
           <Gallery photos={gallery.data} />
         </Section>
       )}
+      <Reviews />
+      <GiftCta config={config} />
       <Section id="how" label={t('КАК ЗАПИСАТЬСЯ')}>
         <h2>
           {t('Ваше время.')}
@@ -491,5 +506,99 @@ function MobileCta({ config }: { config: Config }) {
         {''}
       </WhatsAppLink>
     </div>
+  );
+}
+
+/** Not sure what to choose or how much it costs: a photo in WhatsApp, the master answers. */
+function PhotoPrice({ config }: { config: Config }) {
+  const { t } = useT();
+  return (
+    <div className="photo-price">
+      <span className="contact-icon">
+        <Camera size={20} aria-hidden="true" />
+      </span>
+      <div>
+        <h3>{t('Не знаете, что выбрать или сколько будет стоить?')}</h3>
+        <p>
+          {t(
+            'Пришлите фото волос или желаемой стрижки в WhatsApp — мастер подскажет и назовёт цену.',
+          )}
+        </p>
+      </div>
+      <WhatsAppLink
+        config={config}
+        className="button ghost"
+        text={t('Здравствуйте! Подскажите, пожалуйста, цену. Отправляю фото:')}
+      >
+        {t('Отправить фото')}
+      </WhatsAppLink>
+    </div>
+  );
+}
+
+/** Reviews the owner added in the admin; hidden until there are any. */
+function Reviews() {
+  const { t } = useT();
+  const q = useQuery({
+    queryKey: ['reviews'],
+    queryFn: () =>
+      api<{ reviews: { id: string; name: string; text: string; rating: number }[]; url: string }>(
+        '/reviews',
+      ),
+    staleTime: 5 * 60000,
+  });
+  if (!q.data?.reviews.length) return null;
+  return (
+    <Section id="reviews" label={t('ОТЗЫВЫ')}>
+      <div className="section-heading">
+        <h2>{t('Что говорят клиенты.')}</h2>
+        <a className="text-button" href={q.data.url} target="_blank" rel="noopener noreferrer">
+          {t('Все отзывы')} <ArrowUpRight size={18} />
+        </a>
+      </div>
+      <ul className="reviews">
+        {q.data.reviews.map((r) => (
+          <li key={r.id}>
+            <span className="stars" aria-label={t('Оценка {n} из 5', { n: r.rating })}>
+              {Array.from({ length: r.rating }, (_, i) => (
+                <Star key={i} size={16} fill="currentColor" aria-hidden="true" />
+              ))}
+            </span>
+            <blockquote>{r.text}</blockquote>
+            <cite>{r.name}</cite>
+          </li>
+        ))}
+      </ul>
+    </Section>
+  );
+}
+
+/** Gift certificates are sold in the salon; the site points to WhatsApp. */
+function GiftCta({ config }: { config: Config }) {
+  const { t } = useT();
+  return (
+    <Section id="gift" label={t('ПОДАРОК')}>
+      <div className="gift-cta">
+        <span className="contact-icon">
+          <Gift size={22} aria-hidden="true" />
+        </span>
+        <div>
+          <h2>{t('Подарочный сертификат.')}</h2>
+          <p className="section-intro">
+            {t(
+              'На любую сумму и любые услуги салона. Оформим за пару минут — можно забрать в салоне или получить ссылку в WhatsApp.',
+            )}
+          </p>
+        </div>
+        <WhatsAppLink
+          config={config}
+          text={t('Здравствуйте! Хочу подарочный сертификат в салон «{name}».', {
+            name: config.name,
+          })}
+        >
+          {t('Заказать сертификат')}
+        </WhatsAppLink>
+      </div>
+    </Section>
   );
 }

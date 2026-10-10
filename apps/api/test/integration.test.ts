@@ -1584,6 +1584,77 @@ describe.sequential('real PostgreSQL, HTTP and independent Nest instances', () =
       await db.setting.deleteMany({ where: { key: { startsWith: 'weekly:' } } });
     }
   });
+  it('gift certificates: issued by the owner, printable by code, redeemed once; reviews on the site', async () => {
+    const body = { amountMinor: 1000000, recipient: 'Айгерим', sender: 'от мамы', months: 3 };
+    expect((await call('/admin/gift-cards', 'POST', body, c1)).status).toBe(403);
+    expect((await call('/admin/gift-cards', 'POST', { ...body, months: 0 }, admin)).status).toBe(
+      400,
+    );
+    expect(
+      (await call('/admin/gift-cards', 'POST', { ...body, amountMinor: 0 }, admin)).status,
+    ).toBe(400);
+    const created = await call('/admin/gift-cards', 'POST', body, admin);
+    expect(created.status).toBe(201);
+    const card = created.body as unknown as { id: string; code: string; expiresAt: string };
+    expect(card.code).toMatch(/^[A-HJKMNP-Z2-9]{8}$/);
+    const months = (Date.parse(card.expiresAt) - Date.now()) / (30 * 86400000);
+    expect(months).toBeGreaterThan(2.9);
+    expect(months).toBeLessThan(3.2);
+    // The printable page needs only the code and shows nothing private.
+    const page = await call(`/gift/${card.code.toLowerCase()}`);
+    expect(page.body).toEqual({
+      code: card.code,
+      amountMinor: 1000000,
+      recipient: 'Айгерим',
+      sender: 'от мамы',
+      expiresAt: card.expiresAt,
+      status: 'ACTIVE',
+    });
+    expect((await call('/gift/ZZZZZZZZ')).status).toBe(404);
+    expect((await call('/gift/short')).status).toBe(404);
+    const redeem = (redeemed: boolean, cookie = admin) =>
+      call(`/admin/gift-cards/${card.id}/redeem`, 'PATCH', { redeemed }, cookie);
+    expect((await redeem(true, c1)).status).toBe(403);
+    expect((await redeem(true)).body.status).toBe('USED');
+    expect((await call(`/gift/${card.code}`)).body.status).toBe('USED');
+    expect((await redeem(false)).body.status).toBe('ACTIVE');
+    // An expired certificate cannot be used.
+    await db.giftCard.update({
+      where: { id: card.id },
+      data: { expiresAt: new Date(Date.now() - 1000) },
+    });
+    expect((await redeem(true)).status).toBe(409);
+    expect((await call(`/gift/${card.code}`)).body.status).toBe('EXPIRED');
+    const listed = (await call('/admin/gift-cards', 'GET', undefined, admin)).body as unknown as {
+      id: string;
+      status: string;
+    }[];
+    expect(listed.find((g) => g.id === card.id)?.status).toBe('EXPIRED');
+
+    // Reviews: the owner adds them, the site shows them with the link to all reviews.
+    const review = { name: 'Жанар', rating: 5, text: 'Лучшая стрижка в Зеренде!' };
+    expect((await call('/admin/reviews', 'POST', review, c1)).status).toBe(403);
+    expect((await call('/admin/reviews', 'POST', { ...review, rating: 6 }, admin)).status).toBe(
+      400,
+    );
+    expect((await call('/admin/reviews', 'POST', { ...review, text: ' ' }, admin)).status).toBe(
+      400,
+    );
+    const added = await call('/admin/reviews', 'POST', review, admin);
+    expect(added.status).toBe(201);
+    const site = (await call('/reviews')).body as unknown as {
+      reviews: { id: string; name: string }[];
+      url: string;
+    };
+    expect(site.reviews[0]).toEqual({ id: added.body.id, ...review });
+    expect(site.url).toMatch(/^https:\/\//);
+    expect((await call(`/admin/reviews/${added.body.id}`, 'DELETE', {}, admin)).status).toBe(200);
+    expect(
+      ((await call('/reviews')).body as unknown as { reviews: { id: string }[] }).reviews.some(
+        (r) => r.id === added.body.id,
+      ),
+    ).toBe(false);
+  });
   it('rate limits abusive client without blocking another behind the trusted proxy', async () => {
     const attempt = async (ip: string) =>
       fetch(urls[0] + '/api/v1/auth/login', {

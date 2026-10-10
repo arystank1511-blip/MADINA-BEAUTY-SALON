@@ -26,6 +26,7 @@ import { intl, minutesUntil, Remind, Reminded } from '../remind';
 import { methodNames, Paid, PaymentDialog } from '../payment';
 import { birthdayLabel, ClientCardDialog, ClientSummary } from '../clients';
 import { Photo, PhotoUpload, photoUrl, useGallery } from '../site';
+import { GiftCardsTab, ReviewsAdmin } from '../gifts';
 export const statusNames = {
   PENDING: 'Ждёт подтверждения',
   CONFIRMED: 'Подтверждена',
@@ -63,6 +64,7 @@ export function Admin({ config }: { config: Config }) {
           'Возврат клиентов',
           'WhatsApp',
           'Сайт',
+          'Сертификаты',
           'Услуги',
           'Мастера',
           'Расписание',
@@ -90,6 +92,8 @@ export function Admin({ config }: { config: Config }) {
         <Growth config={config} />
       ) : tab === 'Сайт' ? (
         <SiteTab />
+      ) : tab === 'Сертификаты' ? (
+        <GiftCardsTab config={config} />
       ) : tab === 'WhatsApp' ? (
         <WhatsAppApi config={config} />
       ) : tab === 'Услуги' ? (
@@ -737,7 +741,9 @@ function SiteTab() {
       <div className="admin-toolbar">
         <div>
           <h2>Сайт</h2>
-          <p className="caption">Акция вверху главной страницы и фото работ в разделе «Работы».</p>
+          <p className="caption">
+            Акция вверху главной страницы, отзывы и фото работ в разделе «Работы».
+          </p>
         </div>
       </div>
       {promo.isPending ? (
@@ -787,6 +793,7 @@ function SiteTab() {
           </button>
         </form>
       )}
+      <ReviewsAdmin />
       <section className="panel">
         <h3>Фото работ</h3>
         <p className="caption">
