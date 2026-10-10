@@ -17,6 +17,9 @@ import { Admin, AuthRequest, safeUser, SessionGuard } from '../auth/auth';
 import { Db } from '../db';
 import {
   AdminBookingDto,
+  CaptionDto,
+  PhotoDto,
+  PromoDto,
   ClientDto,
   ClientsQuery,
   GrowthSettingsDto,
@@ -47,6 +50,7 @@ import { WhatsApp } from '../whatsapp';
 import { Growth } from '../growth';
 import { Stats } from '../stats';
 import { Clients } from '../clients';
+import { Site } from '../site';
 /** Comparable phone key: the last 10 digits, so +7 777…, 8 777… and 777… match. */
 export const phoneKey = (phone: string | null | undefined) => {
   const digits = (phone || '').replace(/\D/g, '');
@@ -66,6 +70,7 @@ export class AdminController {
     private growth: Growth,
     private stats: Stats,
     private clients: Clients,
+    private site: Site,
   ) {}
   private async schedule<T>(id: string, mutate: (tx: Tx) => Promise<T>) {
     return this.db.$transaction(
@@ -408,6 +413,29 @@ export class AdminController {
       include: appointmentInclude,
       orderBy: { startsAt: 'asc' },
     });
+  }
+  @Get('promo') @ApiOperation({ summary: 'Баннер акции на сайте' }) promo() {
+    return this.site.promo();
+  }
+  @Put('promo') @ApiOperation({ summary: 'Изменить баннер акции' }) promoSave(@Body() b: PromoDto) {
+    if (b.enabled && !b.text.trim()) fail(400, 'PROMO_EMPTY', 'Напишите текст акции.');
+    return this.site.savePromo({ enabled: b.enabled, text: b.text, until: b.until ?? null });
+  }
+  @Post('gallery') @ApiOperation({ summary: 'Добавить фото работы' }) photoAdd(
+    @Body() b: PhotoDto,
+  ) {
+    return this.site.addPhoto(b);
+  }
+  @Patch('gallery/:id') @ApiOperation({ summary: 'Подпись к фото' }) photoCaption(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() b: CaptionDto,
+  ) {
+    return this.site.caption(id, b.caption);
+  }
+  @Delete('gallery/:id') @ApiOperation({ summary: 'Удалить фото' }) photoDelete(
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.site.remove(id);
   }
   @Get('clients')
   @ApiOperation({ summary: 'Клиенты по номеру телефона: визиты, неявки, заметки' })

@@ -302,3 +302,38 @@ export class ClientsQuery {
   @Length(0, 80)
   q?: string;
 }
+export class PhotoDto {
+  @ApiProperty({ description: 'Изображение в base64 (без префикса data:)' })
+  @IsString()
+  @Length(100, 4000000)
+  data!: string;
+  @ApiProperty({ enum: ['image/jpeg', 'image/png', 'image/webp'] })
+  @IsIn(['image/jpeg', 'image/png', 'image/webp'])
+  mime!: string;
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  @Length(0, 200)
+  caption?: string;
+  @ApiProperty() @IsInt() @Min(1) @Max(10000) width!: number;
+  @ApiProperty() @IsInt() @Min(1) @Max(10000) height!: number;
+}
+export class CaptionDto {
+  @ApiProperty() @IsString() @Length(0, 200) caption!: string;
+}
+export class PromoDto {
+  @ApiProperty() @IsBoolean() enabled!: boolean;
+  @ApiProperty({ example: 'Стрижка + укладка −20% по вторникам' })
+  @IsString()
+  @Length(0, 200)
+  text!: string;
+  @ApiProperty({
+    required: false,
+    nullable: true,
+    example: '2026-10-31',
+    description: 'Показывать по эту дату',
+  })
+  @IsOptional()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  until?: string | null;
+}

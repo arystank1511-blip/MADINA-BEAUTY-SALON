@@ -19,6 +19,7 @@ import { ErrorBox, Loading, Modal, WhatsAppIcon } from '../components';
 import { intl, minutesUntil, Remind, Reminded } from '../remind';
 import { Paid, PaymentDialog } from '../payment';
 import { ClientInfo, isBirthdayToday, NoteDialog } from '../clients';
+import { PhotoUpload } from '../site';
 
 interface Span {
   start: string;
@@ -325,6 +326,9 @@ export function MasterDay({ config }: { config: Config }) {
           }}
         />
       )}
+      <div className="md-photo">
+        <PhotoUpload className="md-btn ghost big" />
+      </div>
       {noting && (
         <NoteDialog
           phone={phoneKey(noting.guestPhone)}

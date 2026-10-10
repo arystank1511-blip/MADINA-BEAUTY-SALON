@@ -1089,6 +1089,72 @@ describe.sequential('real PostgreSQL, HTTP and independent Nest instances', () =
       await db.client.deleteMany({ where: { phone: key } });
     }
   });
+  it('promo banner and gallery: admin edits, the site shows them; only real images are stored', async () => {
+    try {
+      expect((await call('/admin/promo', 'PUT', { enabled: true, text: '' }, admin)).status).toBe(
+        400,
+      );
+      expect(
+        (await call('/admin/promo', 'PUT', { enabled: true, text: 'Скидка' }, c1)).status,
+      ).toBe(403);
+      await call(
+        '/admin/promo',
+        'PUT',
+        { enabled: true, text: '  −20% по вторникам ', until: null },
+        admin,
+      );
+      expect((await call('/promo')).body).toEqual({
+        promo: { text: '−20% по вторникам', until: null },
+      });
+      await call(
+        '/admin/promo',
+        'PUT',
+        { enabled: true, text: 'Прошла', until: '2020-01-01' },
+        admin,
+      );
+      expect((await call('/promo')).body).toEqual({ promo: null });
+      await call('/admin/promo', 'PUT', { enabled: false, text: 'Выкл' }, admin);
+      expect((await call('/promo')).body).toEqual({ promo: null });
+
+      // A 1×1 PNG.
+      const png =
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==' +
+        'A'.repeat(40);
+      const fake = Buffer.from('<script>alert(1)</script>'.repeat(10)).toString('base64');
+      const add = (data: string, mime = 'image/png') =>
+        call(
+          '/admin/gallery',
+          'POST',
+          { data, mime, caption: ' Каре ', width: 1, height: 1 },
+          admin,
+        );
+      expect((await add(fake)).status).toBe(400);
+      expect((await add(png, 'image/gif')).status).toBe(400);
+      const added = await add(png);
+      expect(added.status).toBe(201);
+      const list = (await call('/gallery')).body as unknown as { id: string; caption: string }[];
+      expect(list[0]).toMatchObject({ id: added.body.id, caption: 'Каре' });
+      const file = await fetch(`${urls[1]}/api/v1/gallery/${added.body.id}`);
+      expect(file.headers.get('content-type')).toBe('image/png');
+      expect(file.headers.get('cache-control')).toContain('immutable');
+      expect(
+        Buffer.from(await file.arrayBuffer())
+          .subarray(1, 4)
+          .toString(),
+      ).toBe('PNG');
+      expect(
+        (await call(`/admin/gallery/${added.body.id}`, 'PATCH', { caption: 'Каре и цвет' }, admin))
+          .status,
+      ).toBe(200);
+      expect((await call(`/admin/gallery/${added.body.id}`, 'DELETE', undefined, c1)).status).toBe(
+        403,
+      );
+      await call(`/admin/gallery/${added.body.id}`, 'DELETE', undefined, admin);
+      expect((await fetch(`${urls[0]}/api/v1/gallery/${added.body.id}`)).status).toBe(404);
+    } finally {
+      await db.setting.deleteMany({ where: { key: 'promo' } });
+    }
+  });
   it('rate limits abusive client without blocking another behind the trusted proxy', async () => {
     const attempt = async (ip: string) =>
       fetch(urls[0] + '/api/v1/auth/login', {

@@ -20,11 +20,14 @@ import {
   WhatsAppIcon,
   WhatsAppLink,
 } from '../components';
+import { Gallery, PromoBanner, useGallery } from '../site';
 export function Home({ config }: { config: Config }) {
   const services = useServices(),
-    masters = useMasters();
+    masters = useMasters(),
+    gallery = useGallery();
   return (
     <>
+      <PromoBanner />
       <section className="hero">
         <Halftone id="hero" />
         <div className="hero-top">
@@ -144,6 +147,13 @@ export function Home({ config }: { config: Config }) {
         )}
         <p className="caption">Выберите услугу и удобное время для записи.</p>
       </Section>
+      {!!gallery.data?.length && (
+        <Section id="works" label="РАБОТЫ">
+          <h2>Наши работы.</h2>
+          <p className="section-intro">Фото из салона — до и после.</p>
+          <Gallery photos={gallery.data} />
+        </Section>
+      )}
       <Section id="how" label="КАК ЗАПИСАТЬСЯ">
         <h2>
           Ваше время.

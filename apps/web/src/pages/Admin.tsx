@@ -25,6 +25,7 @@ import { ButtonLink, ErrorBox, Loading, Modal, WhatsAppIcon } from '../component
 import { intl, minutesUntil, Remind, Reminded } from '../remind';
 import { methodNames, Paid, PaymentDialog } from '../payment';
 import { birthdayLabel, ClientCardDialog, ClientSummary } from '../clients';
+import { Photo, PhotoUpload, photoUrl, useGallery } from '../site';
 export const statusNames = {
   PENDING: 'Ждёт подтверждения',
   CONFIRMED: 'Подтверждена',
@@ -61,6 +62,7 @@ export function Admin({ config }: { config: Config }) {
           'Напоминания',
           'Возврат клиентов',
           'WhatsApp',
+          'Сайт',
           'Услуги',
           'Мастера',
           'Расписание',
@@ -86,6 +88,8 @@ export function Admin({ config }: { config: Config }) {
         <Reminders config={config} />
       ) : tab === 'Возврат клиентов' ? (
         <Growth config={config} />
+      ) : tab === 'Сайт' ? (
+        <SiteTab />
       ) : tab === 'WhatsApp' ? (
         <WhatsAppApi config={config} />
       ) : tab === 'Услуги' ? (
@@ -706,6 +710,133 @@ function ClientsTab({ config }: { config: Config }) {
       )}
       {open && <ClientCardDialog phone={open} config={config} onClose={() => setOpen(null)} />}
     </>
+  );
+}
+/** The promo banner and the gallery of work shown on the public site. */
+function SiteTab() {
+  const client = useQueryClient();
+  const [saved, setSaved] = useState(false);
+  const promo = useQuery({
+    queryKey: ['promo', 'admin'],
+    queryFn: () => api<{ enabled: boolean; text: string; until: string | null }>('/admin/promo'),
+  });
+  const save = useMutation({
+    mutationFn: (body: unknown) => send('/admin/promo', 'PUT', body),
+    onSuccess: () => {
+      setSaved(true);
+      void client.invalidateQueries({ queryKey: ['promo'] });
+    },
+  });
+  const gallery = useGallery();
+  return (
+    <>
+      <div className="admin-toolbar">
+        <div>
+          <h2>Сайт</h2>
+          <p className="caption">Акция вверху главной страницы и фото работ в разделе «Работы».</p>
+        </div>
+      </div>
+      {promo.isPending ? (
+        <Loading />
+      ) : promo.error ? (
+        <ErrorBox error={promo.error} />
+      ) : (
+        <form
+          className="panel wa-form"
+          key={JSON.stringify(promo.data)}
+          onSubmit={(e) => {
+            const f = fd(e);
+            setSaved(false);
+            save.mutate({
+              enabled: f.get('enabled') === 'on',
+              text: String(f.get('text')),
+              until: String(f.get('until')) || null,
+            });
+          }}
+        >
+          <h3>Акция</h3>
+          <label className="checkbox">
+            <input type="checkbox" name="enabled" defaultChecked={promo.data.enabled} /> Показывать
+            на сайте
+          </label>
+          <label>
+            Текст
+            <input
+              name="text"
+              maxLength={200}
+              placeholder="Стрижка + укладка −20% по вторникам"
+              defaultValue={promo.data.text}
+            />
+          </label>
+          <label>
+            Показывать по (необязательно)
+            <input name="until" type="date" defaultValue={promo.data.until ?? ''} />
+          </label>
+          {save.error && <ErrorBox error={save.error} />}
+          {saved && (
+            <p role="status" className="price-saved">
+              Сохранено. На сайте обновится в течение пары минут.
+            </p>
+          )}
+          <button className="button" disabled={save.isPending}>
+            Сохранить
+          </button>
+        </form>
+      )}
+      <section className="panel">
+        <h3>Фото работ</h3>
+        <p className="caption">
+          Фото уменьшаются перед загрузкой, поэтому можно загружать прямо с телефона. Нургуль может
+          добавлять фото из «Мой день».
+        </p>
+        <PhotoUpload />
+        {gallery.isPending ? (
+          <Loading />
+        ) : gallery.error ? (
+          <ErrorBox error={gallery.error} />
+        ) : !gallery.data.length ? (
+          <div className="empty">Фото пока нет — раздел «Работы» на сайте скрыт.</div>
+        ) : (
+          <div className="admin-gallery">
+            {gallery.data.map((p) => (
+              <AdminPhoto key={p.id} photo={p} />
+            ))}
+          </div>
+        )}
+      </section>
+    </>
+  );
+}
+function AdminPhoto({ photo }: { photo: Photo }) {
+  const client = useQueryClient();
+  const [caption, setCaption] = useState(photo.caption);
+  const refresh = () => void client.invalidateQueries({ queryKey: ['gallery'] });
+  const rename = useMutation({
+    mutationFn: () => send(`/admin/gallery/${photo.id}`, 'PATCH', { caption }),
+    onSuccess: refresh,
+  });
+  const remove = useMutation({
+    mutationFn: () => send(`/admin/gallery/${photo.id}`, 'DELETE'),
+    onSuccess: refresh,
+  });
+  return (
+    <figure>
+      <img src={photoUrl(photo.id)} alt={photo.caption || 'Работа мастера'} loading="lazy" />
+      <input
+        aria-label="Подпись"
+        maxLength={200}
+        placeholder="Подпись"
+        value={caption}
+        onChange={(e) => setCaption(e.target.value)}
+        onBlur={() => caption !== photo.caption && rename.mutate()}
+      />
+      <button
+        disabled={remove.isPending}
+        onClick={() => window.confirm('Удалить фото с сайта?') && remove.mutate()}
+      >
+        Удалить
+      </button>
+    </figure>
   );
 }
 interface GrowthVisit {

@@ -23,6 +23,7 @@ import {
 } from '../api';
 import { Arrow, ButtonLink, ErrorBox, Loading, WhatsAppIcon, WhatsAppLink } from '../components';
 import { BirthdayInput } from '../clients';
+import { PromoBanner } from '../site';
 export function Book({ config, admin = false }: { config: Config; admin?: boolean }) {
   const [params, setParams] = useSearchParams(),
     services = useServices(),
@@ -245,6 +246,7 @@ export function Book({ config, admin = false }: { config: Config; admin?: boolea
     );
   return (
     <section className="page booking-page">
+      {!admin && <PromoBanner />}
       <p className="eyebrow">
         {admin ? 'ЗАПИСЬ КЛИЕНТА' : 'ОНЛАЙН-ЗАПИСЬ'} / {config.name}
       </p>
