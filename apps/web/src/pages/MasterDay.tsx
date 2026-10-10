@@ -16,6 +16,7 @@ import {
   todayIn,
 } from '../api';
 import { ErrorBox, Loading, Modal, WhatsAppIcon } from '../components';
+import { intl, minutesUntil, Remind, Reminded } from '../remind';
 
 interface Span {
   start: string;
@@ -45,25 +46,10 @@ type Row =
 
 const STEP = 30 * 60000;
 const overlaps = (a: number, b: number, c: number, d: number) => a < d && b > c;
-/** Kazakhstan number in international form (7XXXXXXXXXX) for tel: and wa.me links, or ''. */
-const intl = (phone: string) => {
-  const d = phone.replace(/\D/g, '');
-  if (d.length === 10) return '7' + d;
-  if (d.length === 11 && d.startsWith('8')) return '7' + d.slice(1);
-  return d.length >= 11 ? d : '';
-};
 const phoneKey = (phone: string | null) => {
   const d = (phone || '').replace(/\D/g, '');
   return d.length >= 10 ? d.slice(-10) : '';
 };
-/** Salon-local calendar date (YYYY-MM-DD) of an instant. */
-const dayOf = (iso: string, zone: string) =>
-  new Intl.DateTimeFormat('en-CA', {
-    timeZone: zone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(new Date(iso));
 const weekday = (date: string) =>
   new Intl.DateTimeFormat('ru-RU', { weekday: 'long', timeZone: 'UTC' }).format(
     new Date(date + 'T12:00:00Z'),
@@ -382,6 +368,7 @@ function Visit({
   missed?: number;
 }) {
   const phone = intl(a.guestPhone || '');
+  const soon = a.status === 'CONFIRMED' || a.status === 'PENDING' ? minutesUntil(a.startsAt) : null;
   return (
     <>
       <div className="md-visit-time">
@@ -390,9 +377,11 @@ function Visit({
         {timeLabel(a.startsAt, config.timezone)}–{timeLabel(a.endsAt, config.timezone)}
         {a.status === 'PENDING' && <span className="md-badge">ждёт ответа</span>}
         {a.status === 'NO_SHOW' && <span className="md-badge gray">не пришёл</span>}
+        {soon !== null && soon <= 60 && <span className="md-badge soon">через {soon} мин</span>}
       </div>
       <h3>{clientName(a)}</h3>
       <p>{a.serviceName}</p>
+      <Reminded a={a} config={config} />
       {missed > 0 && a.status !== 'NO_SHOW' && (
         <p className="md-warn">
           ⚠ Уже не приходил(а): {missed} {missed === 1 ? 'раз' : missed < 5 ? 'раза' : 'раз'}.
@@ -410,36 +399,6 @@ function Visit({
         </div>
       )}
     </>
-  );
-}
-
-/** Opens the client's WhatsApp with a ready reminder; the master only taps «Отправить». */
-function Remind({ a, config }: { a: Appointment; config: Config }) {
-  const phone = intl(a.guestPhone || '');
-  if (!phone) return null;
-  const today = todayIn(config.timezone);
-  const day = dateLabel(a.startsAt, config.timezone).replace(/ \d{4} г\.$/, '');
-  const when =
-    dayOf(a.startsAt, config.timezone) === today
-      ? 'сегодня'
-      : dayOf(a.startsAt, config.timezone) === addDays(today, 1)
-        ? 'завтра'
-        : day;
-  const text = [
-    `Здравствуйте${a.guestName ? ', ' + a.guestName : ''}!`,
-    `Напоминаю, вы записаны ${when} в ${timeLabel(a.startsAt, config.timezone)} — ${a.serviceName}.`,
-    `Салон «${config.name}», ${config.address}.`,
-    'Если планы изменятся, напишите, пожалуйста. Спасибо!',
-  ].join('\n');
-  return (
-    <a
-      className="md-btn remind"
-      href={`https://wa.me/${phone}?text=${encodeURIComponent(text)}`}
-      target="_blank"
-      rel="noopener noreferrer"
-    >
-      <WhatsAppIcon size={20} /> Напомнить
-    </a>
   );
 }
 

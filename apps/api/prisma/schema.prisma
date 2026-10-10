@@ -122,6 +122,10 @@ model Appointment {
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
   cancelledAt DateTime? @db.Timestamptz(3)
   cancelledById String? @db.Uuid
+  /// When the salon got the automatic one-hour heads-up in Telegram.
+  alertedAt DateTime? @db.Timestamptz(3)
+  /// When the client was last sent a WhatsApp reminder from the admin or «Мой день».
+  remindedAt DateTime? @db.Timestamptz(3)
   customer User? @relation("Customer",fields:[customerId],references:[id],onDelete:Restrict)
   cancelledBy User? @relation("Canceller",fields:[cancelledById],references:[id])
   master Master @relation(fields:[masterId],references:[id])

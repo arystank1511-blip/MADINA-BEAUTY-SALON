@@ -1,0 +1,21 @@
+name: reminders
+# Every 10 minutes during salon hours (Asia/Almaty, UTC+5): visits starting within the
+# next hour get a Telegram heads-up with a one-tap WhatsApp reminder for the client.
+on:
+  schedule:
+    - cron: '*/10 3-13 * * *'
+  workflow_dispatch:
+permissions: {}
+jobs:
+  remind:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Send due reminders
+        env:
+          SITE_URL: ${{ vars.SITE_URL || 'https://madina-salon.vercel.app' }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          curl -fsS --retry 3 --retry-all-errors --max-time 60 \
+            ${CRON_SECRET:+-H "Authorization: Bearer $CRON_SECRET"} \
+            "$SITE_URL/api/v1/cron/reminders"

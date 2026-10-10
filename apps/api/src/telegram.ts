@@ -21,18 +21,30 @@ export class Telegram {
   get enabled() {
     return !!this.token && this.chats.length > 0;
   }
-  /** Lines are plain text; the first one is shown in bold. Never throws. */
-  async notify(lines: string[]): Promise<boolean> {
+  /** Lines are plain text; the first one is shown in bold, links go last. Never throws. */
+  async notify(lines: string[], links: { text: string; url: string }[] = []): Promise<boolean> {
     if (!this.enabled) return false;
     const [title, ...rest] = lines.map(escape);
-    const text = [`<b>${title}</b>`, ...rest].join('\n');
+    const text = [
+      `<b>${title}</b>`,
+      ...rest,
+      ...links.map(
+        (l) => `<a href="${escape(l.url).replace(/"/g, '&quot;')}">${escape(l.text)}</a>`,
+      ),
+    ].join('\n');
     const results = await Promise.all(
       this.chats.map(async (chat) => {
         try {
-          const response = await fetch(`https://api.telegram.org/bot${this.token}/sendMessage`, {
+          const api = process.env.TELEGRAM_API_URL || 'https://api.telegram.org';
+          const response = await fetch(`${api}/bot${this.token}/sendMessage`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ chat_id: chat, text, parse_mode: 'HTML' }),
+            body: JSON.stringify({
+              chat_id: chat,
+              text,
+              parse_mode: 'HTML',
+              ...(links.length ? { link_preview_options: { is_disabled: true } } : {}),
+            }),
             signal: AbortSignal.timeout(8000),
           });
           if (!response.ok) this.log.warn(`sendMessage failed with HTTP ${response.status}`);

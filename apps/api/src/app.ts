@@ -13,10 +13,17 @@ import { AdminController } from './admin/admin.controller';
 import { PublicController } from './public.controller';
 import { Errors } from './errors';
 import { Telegram } from './telegram';
+import { Reminders, RemindersController } from './reminders';
 import { config, isAllowedOrigin } from './config';
 @Module({
-  controllers: [AuthController, BookingController, AdminController, PublicController],
-  providers: [Db, SessionGuard, BookingService, Telegram],
+  controllers: [
+    AuthController,
+    BookingController,
+    AdminController,
+    PublicController,
+    RemindersController,
+  ],
+  providers: [Db, SessionGuard, BookingService, Telegram, Reminders],
 })
 export class AppModule {}
 export async function createApp() {

@@ -32,6 +32,23 @@ describe('Telegram notifications', () => {
     });
   });
 
+  it('appends links as anchors without previews, escaping the URL', async () => {
+    vi.stubEnv('TELEGRAM_BOT_TOKEN', 'token');
+    vi.stubEnv('TELEGRAM_CHAT_ID', '1');
+    const fetcher = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }));
+    vi.stubGlobal('fetch', fetcher);
+    await new Telegram().notify(
+      ['Через 40 мин'],
+      [{ text: 'Напомнить', url: 'https://wa.me/7?a=1&b="2"' }],
+    );
+    expect(JSON.parse(fetcher.mock.calls[0][1].body)).toEqual({
+      chat_id: '1',
+      text: '<b>Через 40 мин</b>\n<a href="https://wa.me/7?a=1&amp;b=&quot;2&quot;">Напомнить</a>',
+      parse_mode: 'HTML',
+      link_preview_options: { is_disabled: true },
+    });
+  });
+
   it('never throws when Telegram is unreachable', async () => {
     vi.stubEnv('TELEGRAM_BOT_TOKEN', 'token');
     vi.stubEnv('TELEGRAM_CHAT_ID', '1');
