@@ -14,6 +14,7 @@ import { PublicController } from './public.controller';
 import { Errors } from './errors';
 import { Telegram } from './telegram';
 import { Reminders, RemindersController } from './reminders';
+import { WhatsApp } from './whatsapp';
 import { config, isAllowedOrigin } from './config';
 @Module({
   controllers: [
@@ -23,7 +24,7 @@ import { config, isAllowedOrigin } from './config';
     PublicController,
     RemindersController,
   ],
-  providers: [Db, SessionGuard, BookingService, Telegram, Reminders],
+  providers: [Db, SessionGuard, BookingService, Telegram, Reminders, WhatsApp],
 })
 export class AppModule {}
 export async function createApp() {

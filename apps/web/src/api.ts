@@ -45,6 +45,8 @@ export interface Appointment {
   holdUntil: string | null;
   alertedAt: string | null;
   remindedAt: string | null;
+  waSentAt: string | null;
+  waError: string | null;
   serviceName: string;
   priceMinor: number;
   durationMinutes: number;

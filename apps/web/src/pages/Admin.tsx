@@ -47,21 +47,25 @@ export function Admin({ config }: { config: Config }) {
         </div>
       </div>
       <nav className="tabs" aria-label="Разделы управления">
-        {['Записи', 'Напоминания', 'Услуги', 'Мастера', 'Расписание', 'Пароль'].map((t) => (
-          <button
-            key={t}
-            aria-current={tab === t ? 'page' : undefined}
-            className={tab === t ? 'active' : ''}
-            onClick={() => setTab(t)}
-          >
-            {t}
-          </button>
-        ))}
+        {['Записи', 'Напоминания', 'WhatsApp', 'Услуги', 'Мастера', 'Расписание', 'Пароль'].map(
+          (t) => (
+            <button
+              key={t}
+              aria-current={tab === t ? 'page' : undefined}
+              className={tab === t ? 'active' : ''}
+              onClick={() => setTab(t)}
+            >
+              {t}
+            </button>
+          ),
+        )}
       </nav>
       {tab === 'Записи' ? (
         <Appointments config={config} />
       ) : tab === 'Напоминания' ? (
         <Reminders config={config} />
+      ) : tab === 'WhatsApp' ? (
+        <WhatsAppApi config={config} />
       ) : tab === 'Услуги' ? (
         <Services config={config} />
       ) : tab === 'Мастера' ? (
@@ -351,6 +355,12 @@ function Reminders({ config }: { config: Config }) {
                       ) : (
                         <span className="caption">Ещё не напомнили</span>
                       )}
+                      {a.waSentAt && (
+                        <small className="wa-ok">WhatsApp: отправлено автоматически</small>
+                      )}
+                      {a.waError && !a.waSentAt && (
+                        <small className="field-error">WhatsApp API: {a.waError}</small>
+                      )}
                       {a.alertedAt && <small>Telegram: уведомление отправлено</small>}
                     </td>
                     <td>
@@ -367,6 +377,199 @@ function Reminders({ config }: { config: Config }) {
           </table>
         </div>
       )}
+    </>
+  );
+}
+interface WhatsAppSettings {
+  enabled: boolean;
+  phoneNumberId: string;
+  templateName: string;
+  language: string;
+  tokenHint: string;
+}
+/** WhatsApp Business API: the salon's own Meta credentials for automatic client reminders. */
+function WhatsAppApi({ config }: { config: Config }) {
+  const client = useQueryClient();
+  const [saved, setSaved] = useState(false);
+  const q = useQuery({
+    queryKey: ['whatsapp'],
+    queryFn: () => api<WhatsAppSettings>('/admin/whatsapp'),
+  });
+  const save = useMutation({
+    mutationFn: (body: unknown) => send<WhatsAppSettings>('/admin/whatsapp', 'PUT', body),
+    onSuccess: (data) => {
+      client.setQueryData(['whatsapp'], data);
+      setSaved(true);
+    },
+  });
+  const test = useMutation({
+    mutationFn: (phone: string) =>
+      send<{ ok: boolean; error?: string }>('/admin/whatsapp/test', 'POST', { phone }),
+  });
+  function submit(e: FormEvent<HTMLFormElement>) {
+    const form = e.currentTarget;
+    const f = fd(e);
+    setSaved(false);
+    save.mutate(
+      {
+        enabled: f.get('enabled') === 'on',
+        phoneNumberId: String(f.get('phoneNumberId')).trim(),
+        accessToken: String(f.get('accessToken')).trim(),
+        templateName: String(f.get('templateName')).trim(),
+        language: String(f.get('language')).trim() || 'ru',
+      },
+      {
+        onSuccess: () => ((form.elements.namedItem('accessToken') as HTMLInputElement).value = ''),
+      },
+    );
+  }
+  if (q.isPending) return <Loading />;
+  if (q.error) return <ErrorBox error={q.error} retry={() => void q.refetch()} />;
+  const s = q.data;
+  return (
+    <>
+      <div className="admin-toolbar">
+        <div>
+          <h2>WhatsApp Business API</h2>
+          <p className="caption">
+            Когда включено, за час до визита клиент сам получает напоминание в WhatsApp — нажимать
+            ничего не нужно. Сообщения отправляются от вашего бизнес-номера через Meta по
+            одобренному шаблону. Meta берёт плату за сообщения по своему тарифу.
+          </p>
+        </div>
+        <span className={`badge ${s.enabled ? 'confirmed' : 'cancelled'}`}>
+          {s.enabled ? 'Включено' : 'Выключено'}
+        </span>
+      </div>
+      <form className="panel wa-form" onSubmit={submit} key={JSON.stringify(s)}>
+        <label className="checkbox">
+          <input type="checkbox" name="enabled" defaultChecked={s.enabled} /> Автоматически
+          напоминать клиентам за час до визита
+        </label>
+        <label>
+          Phone number ID
+          <input
+            name="phoneNumberId"
+            inputMode="numeric"
+            pattern="\d*"
+            maxLength={30}
+            placeholder="например 123456789012345"
+            defaultValue={s.phoneNumberId}
+          />
+        </label>
+        <label>
+          Access token (постоянный)
+          <input
+            name="accessToken"
+            type="password"
+            autoComplete="off"
+            maxLength={1000}
+            placeholder={
+              s.tokenHint ? `Сохранён (${s.tokenHint}). Оставьте пустым, чтобы не менять` : 'EAAG…'
+            }
+          />
+        </label>
+        <div className="form-grid">
+          <label>
+            Имя шаблона
+            <input
+              name="templateName"
+              maxLength={512}
+              pattern="[a-z0-9_]*"
+              placeholder="reminder_1h"
+              defaultValue={s.templateName}
+            />
+          </label>
+          <label>
+            Язык шаблона
+            <input name="language" maxLength={6} placeholder="ru" defaultValue={s.language} />
+          </label>
+        </div>
+        {save.error && <ErrorBox error={save.error} />}
+        {saved && (
+          <p role="status" className="price-saved">
+            Настройки сохранены.
+          </p>
+        )}
+        <button className="button" disabled={save.isPending}>
+          {save.isPending ? 'Сохраняем…' : 'Сохранить'}
+        </button>
+      </form>
+      <form
+        className="panel wa-form"
+        onSubmit={(e) => {
+          const f = fd(e);
+          test.mutate(String(f.get('phone')));
+        }}
+      >
+        <h3>Проверка</h3>
+        <p className="caption">
+          Сначала сохраните настройки. Пробное напоминание придёт на этот номер — так видно, что всё
+          подключено правильно.
+        </p>
+        <label>
+          Номер WhatsApp
+          <input name="phone" type="tel" required minLength={10} placeholder="+7 777 123 45 67" />
+        </label>
+        {test.error && <ErrorBox error={test.error} />}
+        {test.data &&
+          (test.data.ok ? (
+            <p role="status" className="price-saved">
+              Отправлено. Проверьте WhatsApp на этом номере.
+            </p>
+          ) : (
+            <p role="alert" className="field-error">
+              Meta не отправила сообщение: {test.data.error}
+            </p>
+          ))}
+        <button className="button secondary" disabled={test.isPending}>
+          {test.isPending ? 'Отправляем…' : 'Отправить пробное сообщение'}
+        </button>
+      </form>
+      <section className="panel wa-help">
+        <h3>Как получить данные в Meta</h3>
+        <ol>
+          <li>
+            Зайдите на <strong>developers.facebook.com</strong> → «Мои приложения» → «Создать
+            приложение» → тип «Бизнес» → добавьте продукт <strong>WhatsApp</strong>. Привяжите
+            бизнес-аккаунт Meta (business.facebook.com).
+          </li>
+          <li>
+            WhatsApp → <strong>API Setup</strong>: добавьте номер салона (на нём не должен быть
+            открыт обычный WhatsApp — номер переходит в API). Скопируйте{' '}
+            <strong>Phone number ID</strong> сюда.
+          </li>
+          <li>
+            Постоянный токен: business.facebook.com → Настройки компании → Пользователи →{' '}
+            <strong>Системные пользователи</strong> → добавить (роль «Администратор») → «Назначить
+            активы» (приложение и аккаунт WhatsApp) → «Создать токен» с разрешениями{' '}
+            <code>whatsapp_business_messaging</code> и <code>whatsapp_business_management</code>,
+            срок «Никогда». Вставьте токен сюда.
+          </li>
+          <li>
+            WhatsApp Manager → <strong>Шаблоны сообщений</strong> → «Создать»: категория{' '}
+            <strong>«Служебные» (Utility)</strong>, язык «Русский», имя например{' '}
+            <code>reminder_1h</code>. Текст (переменные именно в таком порядке):
+            <pre>
+              {`Здравствуйте, {{1}}! Напоминаем, вы записаны {{2}} — {{3}}.
+Салон «${config.name}», ${config.address}.
+Если планы изменятся, напишите нам в ответ.`}
+            </pre>
+            {'{{1}}'} — имя клиента, {'{{2}}'} — «сегодня в 14:00», {'{{3}}'} — услуга. Дождитесь
+            статуса «Активен» (обычно от минут до суток).
+          </li>
+          <li>
+            В разделе «Оплата» WhatsApp Manager добавьте карту — без неё Meta не отправляет
+            сообщения клиентам.
+          </li>
+          <li>Сохраните настройки здесь, отправьте пробное сообщение и включите галочку.</li>
+        </ol>
+        <p className="caption">
+          Токен хранится только в базе сайта и обратно в браузер не показывается. Если Meta откажет,
+          причина появится во вкладке «Напоминания» и в уведомлении Telegram, а ссылка «Напомнить
+          клиенту» там останется как запасной вариант.
+        </p>
+      </section>
     </>
   );
 }

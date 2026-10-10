@@ -562,6 +562,118 @@ describe.sequential('real PostgreSQL, HTTP and independent Nest instances', () =
       telegram.close();
     }
   });
+  it('WhatsApp Business API: admin saves settings, test message, automatic reminder once', async () => {
+    const { createServer } = await import('node:http');
+    const calls: { path: string; auth: string; body: Record<string, unknown> }[] = [];
+    let fail = false;
+    const meta = createServer((req, res) => {
+      let raw = '';
+      req.on('data', (chunk) => (raw += chunk));
+      req.on('end', () => {
+        calls.push({
+          path: req.url || '',
+          auth: req.headers.authorization || '',
+          body: JSON.parse(raw),
+        });
+        res.statusCode = fail ? 400 : 200;
+        res.setHeader('content-type', 'application/json');
+        res.end(
+          fail
+            ? '{"error":{"message":"Template name does not exist in the translation"}}'
+            : '{"messages":[{"id":"wamid.1"}]}',
+        );
+      });
+    });
+    await new Promise<void>((resolve) => meta.listen(0, '127.0.0.1', resolve));
+    process.env.WHATSAPP_API_URL = `http://127.0.0.1:${(meta.address() as { port: number }).port}`;
+    try {
+      const settings = {
+        enabled: true,
+        phoneNumberId: '1234567890',
+        accessToken: 'secret-token-abcd',
+        templateName: 'reminder_1h',
+        language: 'ru',
+      };
+      expect((await call('/admin/whatsapp', 'PUT', settings, c1)).status).toBe(403);
+      expect(
+        (
+          await call(
+            '/admin/whatsapp',
+            'PUT',
+            { ...settings, accessToken: '', phoneNumberId: '' },
+            admin,
+          )
+        ).status,
+      ).toBe(400);
+      expect((await call('/admin/whatsapp', 'PUT', settings, admin)).status).toBe(200);
+      // An empty token keeps the saved one; the token itself is never sent back.
+      const saved = await call('/admin/whatsapp', 'PUT', { ...settings, accessToken: '' }, admin);
+      expect(JSON.stringify(saved.body)).not.toContain('secret-token');
+      expect((saved.body as unknown as { tokenHint: string }).tokenHint).toBe('…abcd');
+
+      const test = await call('/admin/whatsapp/test', 'POST', { phone: '8 777 000 11 22' }, admin);
+      expect(test.body).toEqual({ ok: true });
+      expect(calls[0].path).toBe('/1234567890/messages');
+      expect(calls[0].auth).toBe('Bearer secret-token-abcd');
+      expect(calls[0].body).toMatchObject({
+        messaging_product: 'whatsapp',
+        to: '77770001122',
+        type: 'template',
+        template: { name: 'reminder_1h', language: { code: 'ru' } },
+      });
+      fail = true;
+      const failed = await call('/admin/whatsapp/test', 'POST', { phone: '87770001122' }, admin);
+      expect(failed.body).toEqual({
+        ok: false,
+        error: 'Template name does not exist in the translation',
+      });
+
+      const startsAt = new Date(Math.ceil(Date.now() / 60000 + 30) * 60000);
+      const visit = await db.appointment.create({
+        data: {
+          masterId: master2,
+          serviceId: service,
+          guestName: 'Динара',
+          guestPhone: '+7 701 222 33 44',
+          serviceName: 'Тестовая стрижка',
+          priceMinor: 500000,
+          durationMinutes: 60,
+          bufferAfterMinutes: 15,
+          startsAt,
+          endsAt: new Date(+startsAt + 3600000),
+          occupiedUntil: new Date(+startsAt + 75 * 60000),
+        },
+      });
+      const toClient = () => calls.filter((c) => c.body.to === '77012223344');
+      // Meta refuses: the error is stored and the next run tries again.
+      await call('/cron/reminders');
+      let row = await db.appointment.findUniqueOrThrow({ where: { id: visit.id } });
+      expect(row.waSentAt).toBe(null);
+      expect(row.waError).toContain('Template name does not exist');
+      fail = false;
+      await call('/cron/reminders');
+      await call('/cron/reminders');
+      row = await db.appointment.findUniqueOrThrow({ where: { id: visit.id } });
+      expect(toClient()).toHaveLength(2);
+      expect(row.waSentAt).not.toBe(null);
+      expect(row.remindedAt).not.toBe(null);
+      expect(row.waError).toBe(null);
+      const params = (
+        toClient()[1].body.template as { components: { parameters: { text: string }[] }[] }
+      ).components[0].parameters.map((p) => p.text);
+      expect(params[0]).toBe('Динара');
+      expect(params[1]).toMatch(/^сегодня в \d{2}:\d{2}$/);
+      expect(params[2]).toBe('Тестовая стрижка');
+      await db.appointment.update({
+        where: { id: visit.id },
+        data: { status: 'CANCELLED', cancelledAt: new Date() },
+      });
+    } finally {
+      await db.setting.deleteMany({ where: { key: 'whatsapp' } });
+      delete process.env.WHATSAPP_API_URL;
+      meta.close();
+    }
+  });
   it('rate limits abusive client without blocking another behind the trusted proxy', async () => {
     const attempt = async (ip: string) =>
       fetch(urls[0] + '/api/v1/auth/login', {

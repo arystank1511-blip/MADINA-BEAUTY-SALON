@@ -2727,3 +2727,34 @@ tr.soon-row td:first-child {
   color: var(--accent);
   font-weight: 700;
 }
+/* WhatsApp Business API settings */
+.wa-form {
+  display: grid;
+  gap: 16px;
+  max-width: 720px;
+  margin-bottom: 24px;
+}
+.wa-help {
+  max-width: 720px;
+}
+.wa-help ol {
+  display: grid;
+  gap: 14px;
+  padding-left: 22px;
+  list-style: decimal;
+  line-height: 1.55;
+}
+.wa-help pre {
+  white-space: pre-wrap;
+  margin: 10px 0;
+  padding: 14px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  font-size: 13px;
+}
+.wa-ok {
+  color: var(--whatsapp);
+}
+.wa-form .button {
+  justify-self: start;
+}

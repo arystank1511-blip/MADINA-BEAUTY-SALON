@@ -184,3 +184,31 @@ export class ListDto {
 export class MasterQuery {
   @ApiProperty({ required: false }) @IsOptional() @IsUUID() serviceId?: string;
 }
+export class WhatsAppSettingsDto {
+  @ApiProperty() @IsBoolean() enabled!: boolean;
+  @ApiProperty({ description: 'Phone number ID из Meta (WhatsApp → API Setup)' })
+  @IsString()
+  @Matches(/^\d{0,30}$/, { message: 'Phone number ID — только цифры.' })
+  phoneNumberId!: string;
+  @ApiProperty({ required: false, description: 'Пусто — оставить сохранённый токен' })
+  @IsOptional()
+  @IsString()
+  @Length(0, 1000)
+  accessToken?: string;
+  @ApiProperty({ description: 'Имя одобренного шаблона, например reminder_1h' })
+  @IsString()
+  @Matches(/^[a-z0-9_]{0,512}$/, {
+    message: 'Имя шаблона — латиница в нижнем регистре, цифры и «_».',
+  })
+  templateName!: string;
+  @ApiProperty({ description: 'Язык шаблона, например ru' })
+  @IsString()
+  @Matches(/^[a-z]{2,3}(_[A-Z]{2})?$/, { message: 'Код языка, например ru или en_US.' })
+  language!: string;
+}
+export class WhatsAppTestDto {
+  @ApiProperty({ description: 'Номер для проверки, например +7 777 123 45 67' })
+  @IsString()
+  @Length(10, 30)
+  phone!: string;
+}
