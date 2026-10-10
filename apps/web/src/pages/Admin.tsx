@@ -20,6 +20,7 @@ import {
   Window,
 } from '../api';
 import { ButtonLink, ErrorBox, Loading, Modal } from '../components';
+import { minutesUntil, Remind, Reminded } from '../remind';
 export const statusNames = {
   PENDING: 'Ждёт подтверждения',
   CONFIRMED: 'Подтверждена',
@@ -46,7 +47,7 @@ export function Admin({ config }: { config: Config }) {
         </div>
       </div>
       <nav className="tabs" aria-label="Разделы управления">
-        {['Записи', 'Услуги', 'Мастера', 'Расписание', 'Пароль'].map((t) => (
+        {['Записи', 'Напоминания', 'Услуги', 'Мастера', 'Расписание', 'Пароль'].map((t) => (
           <button
             key={t}
             aria-current={tab === t ? 'page' : undefined}
@@ -59,6 +60,8 @@ export function Admin({ config }: { config: Config }) {
       </nav>
       {tab === 'Записи' ? (
         <Appointments config={config} />
+      ) : tab === 'Напоминания' ? (
+        <Reminders config={config} />
       ) : tab === 'Услуги' ? (
         <Services config={config} />
       ) : tab === 'Мастера' ? (
@@ -76,7 +79,7 @@ function Appointments({ config }: { config: Config }) {
     [filter, setFilter] = useState({ from: '', to: '', masterId: '', status: '' }),
     [action, setAction] = useState<{
       appointment: Appointment;
-      type: 'cancel' | 'complete';
+      type: 'cancel' | 'complete' | 'no-show';
     } | null>(null);
   const client = useQueryClient(),
     masters = useMasters(true);
@@ -182,6 +185,7 @@ function Appointments({ config }: { config: Config }) {
                         <span className={`badge ${a.status.toLowerCase()}`}>
                           {statusNames[a.status]}
                         </span>
+                        <Reminded a={a} config={config} />
                       </td>
                       <td>
                         {(a.status === 'CONFIRMED' || a.status === 'PENDING') &&
@@ -195,6 +199,20 @@ function Appointments({ config }: { config: Config }) {
                               Отменить
                             </button>
                           )}
+                        {(a.status === 'CONFIRMED' || a.status === 'PENDING') &&
+                          new Date(a.startsAt) > new Date() && (
+                            <Remind a={a} config={config} className="table-remind" />
+                          )}
+                        {a.status === 'CONFIRMED' && new Date(a.startsAt) <= new Date() && (
+                          <button
+                            onClick={() => {
+                              mutation.reset();
+                              setAction({ appointment: a, type: 'no-show' });
+                            }}
+                          >
+                            Не пришёл
+                          </button>
+                        )}
                         {a.status === 'CONFIRMED' && new Date(a.endsAt) <= new Date() && (
                           <button
                             onClick={() => {
@@ -231,7 +249,13 @@ function Appointments({ config }: { config: Config }) {
       )}
       {action && (
         <Modal
-          title={action.type === 'cancel' ? 'Отменить запись?' : 'Завершить посещение?'}
+          title={
+            action.type === 'cancel'
+              ? 'Отменить запись?'
+              : action.type === 'no-show'
+                ? 'Клиент не пришёл?'
+                : 'Завершить посещение?'
+          }
           onClose={() => !mutation.isPending && setAction(null)}
         >
           <p>
@@ -255,6 +279,93 @@ function Appointments({ config }: { config: Config }) {
             </button>
           </div>
         </Modal>
+      )}
+    </>
+  );
+}
+/** Visits in the next 24 hours: who still needs a reminder and who already got one. */
+function Reminders({ config }: { config: Config }) {
+  const q = useQuery({
+    queryKey: ['reminders'],
+    queryFn: () => api<Appointment[]>('/admin/reminders'),
+    refetchInterval: 60000,
+  });
+  return (
+    <>
+      <div className="admin-toolbar">
+        <div>
+          <h2>Напоминания</h2>
+          <p className="caption">
+            За час до визита в Telegram приходит уведомление со ссылкой «Напомнить клиенту в
+            WhatsApp». Здесь видно, кому уже напомнили, и можно напомнить вручную: нажмите
+            «Напомнить» и в WhatsApp — «Отправить».
+          </p>
+        </div>
+      </div>
+      {q.isPending ? (
+        <Loading />
+      ) : q.error ? (
+        <ErrorBox error={q.error} retry={() => void q.refetch()} />
+      ) : !q.data?.length ? (
+        <div className="empty">В ближайшие 24 часа записей нет.</div>
+      ) : (
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Время</th>
+                <th>Клиент</th>
+                <th>Услуга</th>
+                <th>Напоминание</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {q.data.map((a) => {
+                const left = minutesUntil(a.startsAt);
+                return (
+                  <tr key={a.id} className={left !== null && left <= 60 ? 'soon-row' : ''}>
+                    <td>
+                      {timeLabel(a.startsAt, config.timezone)}
+                      <small>
+                        {left !== null && left <= 60
+                          ? `через ${left} мин`
+                          : dateLabel(a.startsAt, config.timezone)}
+                      </small>
+                    </td>
+                    <td>
+                      {clientName(a)}
+                      <small>{a.guestPhone || a.customer?.email || 'без телефона'}</small>
+                    </td>
+                    <td>
+                      {a.serviceName}
+                      {a.status === 'PENDING' && (
+                        <small>
+                          <span className="badge pending">{statusNames.PENDING}</span>
+                        </small>
+                      )}
+                    </td>
+                    <td>
+                      {a.remindedAt ? (
+                        <Reminded a={a} config={config} />
+                      ) : (
+                        <span className="caption">Ещё не напомнили</span>
+                      )}
+                      {a.alertedAt && <small>Telegram: уведомление отправлено</small>}
+                    </td>
+                    <td>
+                      {a.guestPhone ? (
+                        <Remind a={a} config={config} className="table-remind" />
+                      ) : (
+                        <small>Нет телефона</small>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       )}
     </>
   );

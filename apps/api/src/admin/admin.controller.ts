@@ -34,6 +34,7 @@ import { config } from '../config';
 import { fail } from '../errors';
 import { fitsSchedule, localInstant, salonDate, startOfDay } from '../availability/rules';
 import { Temporal } from '@js-temporal/polyfill';
+import { Reminders } from '../reminders';
 /** Comparable phone key: the last 10 digits, so +7 777…, 8 777… and 777… match. */
 export const phoneKey = (phone: string | null | undefined) => {
   const digits = (phone || '').replace(/\D/g, '');
@@ -48,6 +49,7 @@ export class AdminController {
   constructor(
     private db: Db,
     private booking: BookingService,
+    private reminders: Reminders,
   ) {}
   private async schedule<T>(id: string, mutate: (tx: Tx) => Promise<T>) {
     return this.db.$transaction(
@@ -373,6 +375,33 @@ export class AdminController {
       include: appointmentInclude,
       orderBy: { startsAt: 'asc' },
     });
+  }
+  @Get('reminders')
+  @ApiOperation({ summary: 'Визиты на ближайшие сутки: кому напомнить и кому уже напомнили' })
+  async upcoming() {
+    const now = new Date();
+    // Opening the admin also sends any due Telegram heads-up, in case the schedule ran late.
+    await this.reminders.run(now);
+    return this.db.appointment.findMany({
+      where: {
+        ...activeAt(now),
+        status: { in: ['CONFIRMED', 'PENDING'] },
+        startsAt: { gt: now, lte: new Date(+now + 24 * 3600000) },
+      },
+      include: appointmentInclude,
+      orderBy: { startsAt: 'asc' },
+    });
+  }
+  @Patch('appointments/:id/reminded')
+  @ApiOperation({ summary: 'Отметить, что клиенту отправлено напоминание в WhatsApp' })
+  async reminded(@Param('id', ParseUUIDPipe) id: string) {
+    const remindedAt = new Date();
+    const { count } = await this.db.appointment.updateMany({
+      where: { id, status: { in: ['CONFIRMED', 'PENDING'] } },
+      data: { remindedAt },
+    });
+    if (!count) fail(404, 'NOT_FOUND', 'Запись не найдена или уже не активна.');
+    return { remindedAt };
   }
   @Patch('appointments/:id/confirm')
   @ApiOperation({ summary: 'Подтвердить заявку с сайта' })

@@ -43,6 +43,8 @@ export interface Appointment {
   guestName: string | null;
   guestPhone: string | null;
   holdUntil: string | null;
+  alertedAt: string | null;
+  remindedAt: string | null;
   serviceName: string;
   priceMinor: number;
   durationMinutes: number;

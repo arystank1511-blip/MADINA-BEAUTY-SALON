@@ -430,12 +430,14 @@ describe.sequential('real PostgreSQL, HTTP and independent Nest instances', () =
     expect(body.fits[service]).not.toContain(at('20:00'));
   });
   it('marks missed visits and counts them per phone in the day view', async () => {
+    // A fresh number per run, so missed visits from earlier runs on the same DB don't count.
+    const tail = String(Math.floor(Math.random() * 1e4)).padStart(4, '0');
     const past = new Date(Date.now() - 2 * 3600000);
     past.setUTCSeconds(0, 0);
     const missed = await db.appointment.create({
       data: {
         guestName: 'Пропускающая',
-        guestPhone: '8 (777) 555-44-33',
+        guestPhone: `8 (777) 555-${tail.slice(0, 2)}-${tail.slice(2)}`,
         masterId: master,
         serviceId: service,
         startsAt: past,
@@ -462,16 +464,103 @@ describe.sequential('real PostgreSQL, HTTP and independent Nest instances', () =
         masterId: master,
         startsAt: localInstant(next, '12:00', 'Asia/Almaty').toISOString(),
         guestName: 'Пропускающая',
-        guestPhone: '+7 777 555 44 33',
+        guestPhone: `+7 777 555 ${tail.slice(0, 2)} ${tail.slice(2)}`,
       },
       admin,
     );
     expect(future.status).toBe(201);
     expect((await mark(future.body.id)).status).toBe(409);
     const day = await call(`/admin/day?date=${next}&masterId=${master}`, 'GET', undefined, admin);
-    expect((day.body as unknown as { noShows: Record<string, number> }).noShows['7775554433']).toBe(
-      1,
-    );
+    expect(
+      (day.body as unknown as { noShows: Record<string, number> }).noShows['777555' + tail],
+    ).toBe(1);
+  });
+  it('sends one Telegram heads-up an hour before a visit; admin marks the WhatsApp reminder', async () => {
+    const { createServer } = await import('node:http');
+    const sent: { chat_id: string; text: string }[] = [];
+    const telegram = createServer((req, res) => {
+      let raw = '';
+      req.on('data', (chunk) => (raw += chunk));
+      req.on('end', () => {
+        sent.push(JSON.parse(raw));
+        res.setHeader('content-type', 'application/json').end('{"ok":true}');
+      });
+    });
+    await new Promise<void>((resolve) => telegram.listen(0, '127.0.0.1', resolve));
+    const { port } = telegram.address() as { port: number };
+    Object.assign(process.env, {
+      TELEGRAM_BOT_TOKEN: 'test-token',
+      TELEGRAM_CHAT_ID: '42',
+      TELEGRAM_API_URL: `http://127.0.0.1:${port}`,
+    });
+    const guest = `Гость ${randomUUID().slice(0, 8)}`;
+    const visit = async (minutesAhead: number) => {
+      const startsAt = new Date(Math.ceil(Date.now() / 60000 + minutesAhead) * 60000);
+      return db.appointment.create({
+        data: {
+          masterId: master2,
+          serviceId: service,
+          guestName: guest,
+          guestPhone: '8 777 123 45 67',
+          serviceName: 'Тестовая стрижка',
+          priceMinor: 500000,
+          durationMinutes: 60,
+          bufferAfterMinutes: 15,
+          startsAt,
+          endsAt: new Date(+startsAt + 3600000),
+          occupiedUntil: new Date(+startsAt + 75 * 60000),
+        },
+      });
+    };
+    try {
+      const soon = await visit(40),
+        later = await visit(180);
+      const mine = () => sent.filter((m) => m.text.includes(guest));
+      expect((await call('/cron/reminders')).status).toBe(200);
+      expect(mine()).toHaveLength(1);
+      expect(mine()[0].chat_id).toBe('42');
+      expect(mine()[0].text).toContain('https://wa.me/77771234567?text=');
+      expect(
+        (await db.appointment.findUniqueOrThrow({ where: { id: soon.id } })).alertedAt,
+      ).not.toBe(null);
+      // Repeated runs (the schedule, opening the admin) never send the same heads-up twice.
+      await call('/cron/reminders');
+      const list = await call('/admin/reminders', 'GET', undefined, admin);
+      expect(mine()).toHaveLength(1);
+      const ids = (list.body as unknown as { id: string }[]).map((a) => a.id);
+      expect(ids).toEqual(expect.arrayContaining([soon.id, later.id]));
+      expect((await db.appointment.findUniqueOrThrow({ where: { id: later.id } })).alertedAt).toBe(
+        null,
+      );
+      expect((await call(`/admin/appointments/${later.id}/reminded`, 'PATCH', {}, c1)).status).toBe(
+        403,
+      );
+      expect(
+        (await call(`/admin/appointments/${later.id}/reminded`, 'PATCH', {}, admin)).status,
+      ).toBe(200);
+      expect(
+        (await db.appointment.findUniqueOrThrow({ where: { id: later.id } })).remindedAt,
+      ).not.toBe(null);
+      process.env.CRON_SECRET = 'cron-secret';
+      expect((await call('/cron/reminders')).status).toBe(401);
+      const auth = await fetch(urls[0] + '/api/v1/cron/reminders', {
+        headers: { authorization: 'Bearer cron-secret' },
+      });
+      expect(auth.status).toBe(200);
+      await db.appointment.updateMany({
+        where: { id: { in: [soon.id, later.id] } },
+        data: { status: 'CANCELLED', cancelledAt: new Date() },
+      });
+    } finally {
+      for (const key of [
+        'TELEGRAM_BOT_TOKEN',
+        'TELEGRAM_CHAT_ID',
+        'TELEGRAM_API_URL',
+        'CRON_SECRET',
+      ])
+        delete process.env[key];
+      telegram.close();
+    }
   });
   it('rate limits abusive client without blocking another behind the trusted proxy', async () => {
     const attempt = async (ip: string) =>
