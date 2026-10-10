@@ -6,7 +6,7 @@ import qrcode from 'qrcode-generator';
 import '@fontsource/cormorant-garamond/500.css';
 import '@fontsource/cormorant-garamond/600.css';
 import '@fontsource/cormorant-garamond/500-italic.css';
-import { api, Config, dateLabel, money, phoneLabel } from '../api';
+import { api, Config, dateLabel, money } from '../api';
 import { ButtonLink, ErrorBox, Loading, WhatsAppIcon } from '../components';
 import { useT } from '../i18n';
 
@@ -114,12 +114,6 @@ export function Gift({ config }: { config: Config }) {
                 <span>{t('Проверить')}</span>
               </div>
             </div>
-            <p className="gc-terms">
-              {t('На любые услуги салона.')} {t('Запись')}: {location.host}/book · WhatsApp{' '}
-              {phoneLabel(config.whatsapp)}
-              <br />
-              {t(config.address)}
-            </p>
           </div>
           {g.status !== 'ACTIVE' && (
             <span className="gc-stamp">
