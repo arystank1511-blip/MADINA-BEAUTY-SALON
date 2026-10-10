@@ -336,7 +336,6 @@ export const kk: Record<string, string> = {
   'Здравствуйте! Хочу задать вопрос мастеру {name}.':
     'Сәлеметсіз бе! {name} шеберге сұрақ қойғым келеді.',
   'Задать вопрос': 'Сұрақ қою',
-  Залы: 'Залдар',
 };
 /** Kazakh month names in the genitive-like form used after a day number («15 наурыз»). */
 export const kkMonths = [
