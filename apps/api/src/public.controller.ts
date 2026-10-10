@@ -11,6 +11,7 @@ import { intlPhone } from './reminders';
 import { Clients } from './clients';
 import { Site } from './site';
 import { Push } from './push';
+import { VisitLinks } from './visit';
 @ApiTags('Публичные')
 @Controller()
 export class PublicController {
@@ -21,6 +22,7 @@ export class PublicController {
     private clients: Clients,
     private site: Site,
     private push: Push,
+    private links: VisitLinks,
   ) {}
   private requests = new Map<string, { count: number; until: number }>();
   @Get('config') @ApiOperation({ summary: 'Настройки салона' }) settings() {
@@ -115,7 +117,13 @@ export class PublicController {
         tag: `request-${a.id}`,
       }),
     ]);
-    return { id: a.id, startsAt: a.startsAt, holdUntil: a.holdUntil, telegram };
+    return {
+      id: a.id,
+      startsAt: a.startsAt,
+      holdUntil: a.holdUntil,
+      telegram,
+      manageUrl: await this.links.url(a.id),
+    };
   }
   @Get('promo') @ApiOperation({ summary: 'Баннер акции: { promo: {...} | null }' }) async promo() {
     // Wrapped: a bare null would be an empty response body.

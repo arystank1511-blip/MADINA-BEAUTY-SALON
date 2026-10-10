@@ -3369,3 +3369,72 @@ tr.clickable:hover td {
   display: flex;
   gap: 10px;
 }
+/* Personal visit link and waitlist */
+.manage-link {
+  max-width: 520px;
+  margin: 36px auto 0;
+  padding-top: 28px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+}
+.visit-page {
+  max-width: 640px;
+}
+.visit-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+}
+.visit-status.active {
+  color: var(--success);
+}
+.visit-move .slots {
+  margin: 20px 0 28px;
+}
+.visit-page .form-actions {
+  flex-wrap: wrap;
+}
+.waitlist {
+  display: grid;
+  gap: 14px;
+  margin-top: 28px;
+  padding-top: 24px;
+  border-top: 1px solid var(--line);
+}
+.waitlist h4 {
+  margin: 0;
+  font-size: 18px;
+}
+.empty .waitlist p {
+  margin: 0;
+  color: var(--muted);
+}
+.waitlist-done {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 24px;
+  color: var(--success);
+}
+.md-waitlist {
+  margin-top: 24px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+.md-waitlist h3 {
+  margin: 0 0 6px;
+}
+.md-wait {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding-top: 14px;
+  margin-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.md-wait a[href^='tel'] {
+  color: var(--muted);
+}

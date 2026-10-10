@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Check, ChevronLeft } from 'lucide-react';
 import {
@@ -37,7 +37,7 @@ export function Book({ config, admin = false }: { config: Config; admin?: boolea
     [guestName, setGuestName] = useState(''),
     [guestPhone, setGuestPhone] = useState(''),
     [birthday, setBirthday] = useState(''),
-    [sent, setSent] = useState(false);
+    [sent, setSent] = useState<{ manageUrl?: string } | null>(null);
   const [customerPage, setCustomerPage] = useState(1);
   const serviceId = params.get('service') || '',
     masterId = params.get('master') || '',
@@ -153,7 +153,7 @@ export function Book({ config, admin = false }: { config: Config; admin?: boolea
   // The request holds the slot for the master; WhatsApp is how the client confirms it.
   const request = useMutation({
     mutationFn: () =>
-      send('/booking-requests', 'POST', {
+      send<{ manageUrl?: string }>('/booking-requests', 'POST', {
         serviceId,
         masterId,
         startsAt: time,
@@ -161,8 +161,8 @@ export function Book({ config, admin = false }: { config: Config; admin?: boolea
         phone: guestPhone.trim(),
         ...(birthday ? { birthday } : {}),
       }),
-    onSuccess: () => {
-      setSent(true);
+    onSuccess: (r) => {
+      setSent(r);
       void client.invalidateQueries({ queryKey: ['availability'] });
     },
     onError: (e) => {
@@ -231,6 +231,7 @@ export function Book({ config, admin = false }: { config: Config; admin?: boolea
             {t('На главную')}
           </ButtonLink>
         </div>
+        {sent.manageUrl && <ManageLink url={sent.manageUrl} />}
       </section>
     );
   if (success)
@@ -432,6 +433,7 @@ export function Book({ config, admin = false }: { config: Config; admin?: boolea
                   >
                     {t('Следующий день')} <Arrow />
                   </button>
+                  {!admin && <WaitlistForm date={date} serviceId={serviceId} />}
                 </div>
               )}
             </>
@@ -569,5 +571,97 @@ export function Book({ config, admin = false }: { config: Config; admin?: boolea
         </aside>
       </div>
     </section>
+  );
+}
+
+/** The client's personal link to move or cancel the visit later. */
+function ManageLink({ url }: { url: string }) {
+  const { t } = useT();
+  const [copied, setCopied] = useState(false);
+  const path = new URL(url, location.origin).pathname;
+  return (
+    <div className="manage-link">
+      <p>{t('Планы изменились? По этой ссылке можно перенести или отменить запись:')}</p>
+      <div className="form-actions">
+        <Link className="button secondary" to={path}>
+          {t('Моя запись')}
+        </Link>
+        <button
+          className="button secondary"
+          onClick={() =>
+            void navigator.clipboard?.writeText(url).then(
+              () => setCopied(true),
+              () => undefined,
+            )
+          }
+        >
+          {copied ? t('Скопировано') : t('Скопировать ссылку')}
+        </button>
+      </div>
+    </div>
+  );
+}
+/** On a full day the client can ask to be told if a time frees up. */
+function WaitlistForm({ date, serviceId }: { date: string; serviceId: string }) {
+  const { t } = useT();
+  const [name, setName] = useState(''),
+    [phone, setPhone] = useState('');
+  const join = useMutation({
+    mutationFn: () =>
+      send('/waitlist', 'POST', {
+        date,
+        name: name.trim(),
+        phone: phone.trim(),
+        ...(serviceId ? { serviceId } : {}),
+      }),
+  });
+  useEffect(() => join.reset(), [date]);
+  if (join.isSuccess)
+    return (
+      <p className="waitlist-done">
+        <Check size={18} /> {t('Готово! Если время освободится, мастер напишет вам в WhatsApp.')}
+      </p>
+    );
+  return (
+    <form
+      className="waitlist"
+      onSubmit={(e) => {
+        e.preventDefault();
+        join.mutate();
+      }}
+    >
+      <h4>{t('Хотите именно этот день?')}</h4>
+      <p>{t('Оставьте имя и телефон — напишем, если кто-то отменит запись.')}</p>
+      <label>
+        {t('Ваше имя')}
+        <input
+          autoComplete="given-name"
+          required
+          minLength={2}
+          maxLength={80}
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
+      </label>
+      <label>
+        {t('Телефон (WhatsApp)')}
+        <input
+          type="tel"
+          autoComplete="tel"
+          inputMode="tel"
+          required
+          minLength={10}
+          maxLength={30}
+          placeholder="+7 777 123 45 67"
+          pattern="[+0-9\s()\-]*"
+          value={phone}
+          onChange={(e) => setPhone(e.target.value)}
+        />
+      </label>
+      {join.error && <ErrorBox error={join.error} />}
+      <button className="button" disabled={join.isPending}>
+        {join.isPending ? t('Отправляем…') : t('Сообщить мне')}
+      </button>
+    </form>
   );
 }

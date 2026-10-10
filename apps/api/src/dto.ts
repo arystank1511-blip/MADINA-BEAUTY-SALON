@@ -366,3 +366,26 @@ export class MasterLoginDto {
   @Length(10, 128)
   password!: string;
 }
+export class RescheduleDto {
+  @ApiProperty({ example: '2030-01-07T10:00:00+05:00' })
+  @IsDateString({ strict: true })
+  startsAt!: string;
+}
+export class WaitlistDto {
+  @ApiProperty({ example: '2026-10-20' })
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  date!: string;
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsUUID()
+  serviceId?: string;
+  @ApiProperty()
+  @Transform(({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value))
+  @IsString()
+  @Length(2, 80)
+  name!: string;
+  @ApiProperty()
+  @IsString()
+  @Matches(/^[+\d\s()-]{10,30}$/, { message: 'Укажите телефон, например +7 777 123 45 67.' })
+  phone!: string;
+}

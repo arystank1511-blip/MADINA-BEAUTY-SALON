@@ -18,6 +18,7 @@ import { LangSwitch, useT } from './i18n';
 const Book = lazy(() => import('./pages/Book').then((m) => ({ default: m.Book })));
 const Auth = lazy(() => import('./pages/Auth').then((m) => ({ default: m.Auth })));
 const Admin = lazy(() => import('./pages/Admin').then((m) => ({ default: m.Admin })));
+const Visit = lazy(() => import('./pages/Visit').then((m) => ({ default: m.Visit })));
 const MasterDay = lazy(() => import('./pages/MasterDay').then((m) => ({ default: m.MasterDay })));
 /** `admin`: owner only; `staff`: owner or master («Мой день»). */
 function Gate({
@@ -174,6 +175,14 @@ export function App() {
             element={
               <Suspense fallback={<Loading />}>
                 <Auth config={config} />
+              </Suspense>
+            }
+          />
+          <Route
+            path="/v/:ref"
+            element={
+              <Suspense fallback={<Loading />}>
+                <Visit config={config} />
               </Suspense>
             }
           />

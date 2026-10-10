@@ -12,6 +12,7 @@ const files = [
   'site.tsx',
   'pages/Home.tsx',
   'pages/Book.tsx',
+  'pages/Visit.tsx',
 ];
 /** Every literal passed to t('…') on the public pages, including multi-line calls. */
 const keys = files.flatMap((file) =>
