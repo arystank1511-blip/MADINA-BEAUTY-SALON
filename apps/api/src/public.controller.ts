@@ -1,5 +1,5 @@
-import { Body, Controller, Get, Post, Query, Req } from '@nestjs/common';
-import { Request } from 'express';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query, Req, Res } from '@nestjs/common';
+import { Request, Response } from 'express';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Db } from './db';
 import { config } from './config';
@@ -9,6 +9,7 @@ import { Telegram } from './telegram';
 import { BookingService } from './booking/booking.service';
 import { intlPhone } from './reminders';
 import { Clients } from './clients';
+import { Site } from './site';
 @ApiTags('Публичные')
 @Controller()
 export class PublicController {
@@ -17,6 +18,7 @@ export class PublicController {
     private booking: BookingService,
     private telegram: Telegram,
     private clients: Clients,
+    private site: Site,
   ) {}
   private requests = new Map<string, { count: number; until: number }>();
   @Get('config') @ApiOperation({ summary: 'Настройки салона' }) settings() {
@@ -105,6 +107,22 @@ export class PublicController {
       'Время придержано на 3 часа. Подтвердите в «Мой день».',
     ]);
     return { id: a.id, startsAt: a.startsAt, holdUntil: a.holdUntil, telegram };
+  }
+  @Get('promo') @ApiOperation({ summary: 'Баннер акции: { promo: {...} | null }' }) async promo() {
+    // Wrapped: a bare null would be an empty response body.
+    return { promo: await this.site.activePromo() };
+  }
+  @Get('gallery') @ApiOperation({ summary: 'Фото работ салона, новые сначала' }) gallery() {
+    return this.site.gallery();
+  }
+  @Get('gallery/:id')
+  @ApiOperation({ summary: 'Файл фото; неизменяемый, кэшируется надолго' })
+  async photo(@Param('id', ParseUUIDPipe) id: string, @Res() res: Response) {
+    const p = await this.site.photo(id);
+    if (!p) fail(404, 'NOT_FOUND', 'Фото не найдено.');
+    res.setHeader('Content-Type', p.mime);
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    res.send(Buffer.from(p.data));
   }
   @Get('health') @ApiOperation({ summary: 'Liveness' }) health() {
     return { status: 'ok' };

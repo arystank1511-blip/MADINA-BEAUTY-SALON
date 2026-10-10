@@ -165,3 +165,14 @@ model Client {
   greetedYear Int?
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
 }
+/// Photos of the salon's work, shown on the site. Stored in the database: the site has no disk.
+model Photo {
+  id String @id @default(uuid()) @db.Uuid
+  data Bytes
+  mime String
+  caption String @default("")
+  width Int
+  height Int
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  @@index([createdAt])
+}

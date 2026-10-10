@@ -1,6 +1,7 @@
 import 'reflect-metadata';
 import { Module, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
@@ -18,6 +19,7 @@ import { WhatsApp } from './whatsapp';
 import { Growth } from './growth';
 import { Stats } from './stats';
 import { Clients } from './clients';
+import { Site } from './site';
 import { config, isAllowedOrigin } from './config';
 @Module({
   controllers: [
@@ -37,11 +39,14 @@ import { config, isAllowedOrigin } from './config';
     Growth,
     Stats,
     Clients,
+    Site,
   ],
 })
 export class AppModule {}
 export async function createApp() {
-  const app = await NestFactory.create(AppModule, { logger: ['error', 'warn'] });
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    logger: ['error', 'warn'],
+  });
   // Only enable one trusted hop when API is reachable exclusively through our proxy.
   if (process.env.TRUST_PROXY === '1') app.getHttpAdapter().getInstance().set('trust proxy', 1);
   app.use(helmet());
@@ -59,6 +64,8 @@ export async function createApp() {
     }
     next();
   });
+  // Gallery uploads are resized in the browser; 4 MB of JSON leaves room for the base64 image.
+  app.useBodyParser('json', { limit: '4mb' });
   app.setGlobalPrefix('api/v1');
   app.useGlobalPipes(
     new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),

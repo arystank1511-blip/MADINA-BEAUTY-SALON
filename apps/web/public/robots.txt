@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /master
+Disallow: /login
+Disallow: /api/
+
+Sitemap: https://madina-salon.vercel.app/sitemap.xml
