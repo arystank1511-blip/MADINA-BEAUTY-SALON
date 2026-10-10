@@ -23,7 +23,7 @@ import {
 } from '../api';
 import { Arrow, ButtonLink, ErrorBox, Loading, WhatsAppIcon, WhatsAppLink } from '../components';
 import { BirthdayInput } from '../clients';
-import { PromoBanner } from '../site';
+import { PromoBanner, useOffers } from '../site';
 import { useT } from '../i18n';
 export function Book({ config, admin = false }: { config: Config; admin?: boolean }) {
   const [params, setParams] = useSearchParams(),
@@ -31,6 +31,7 @@ export function Book({ config, admin = false }: { config: Config; admin?: boolea
     masters = useMasters(),
     client = useQueryClient();
   const { t, lang, locale } = useT();
+  const offers = useOffers();
   const [error, setError] = useState<unknown>(null),
     [success, setSuccess] = useState<Appointment | null>(null),
     [customer, setCustomer] = useState(''),
@@ -524,7 +525,11 @@ export function Book({ config, admin = false }: { config: Config; admin?: boolea
                       />
                     </label>
                     <BirthdayInput
-                      label={t('День рождения — по желанию, пришлём скидку')}
+                      label={
+                        offers.data?.birthdayDiscount
+                          ? t('День рождения — по желанию, пришлём скидку')
+                          : t('День рождения — по желанию, поздравим')
+                      }
                       value={birthday}
                       onChange={setBirthday}
                     />

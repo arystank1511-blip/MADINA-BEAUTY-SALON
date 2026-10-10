@@ -1447,7 +1447,19 @@ describe.sequential('real PostgreSQL, HTTP and independent Nest instances', () =
     const endpoint = `https://push.example.com/${randomUUID()}`;
     const tail = String(Math.floor(Math.random() * 1e7)).padStart(7, '0');
     try {
-      expect(((await call('/loyalty')).body as unknown as { loyalty: unknown }).loyalty).toBeNull();
+      // Nothing about discounts on the site until the owner switches it on.
+      const growth = (discount: number) =>
+        call(
+          '/admin/growth',
+          'PUT',
+          { reviewUrl: 'https://2gis.kz/firm/1', returnWeeks: 5, birthdayDiscount: discount },
+          admin,
+        );
+      await growth(0);
+      expect((await call('/offers')).body).toEqual({ loyalty: null, birthdayDiscount: null });
+      await growth(15);
+      expect((await call('/offers')).body).toEqual({ loyalty: null, birthdayDiscount: 15 });
+      await growth(0);
       const settings = { enabled: true, every: 3, reward: 'стрижка в подарок' };
       expect((await call('/admin/loyalty', 'PUT', settings, c1)).status).toBe(403);
       expect((await call('/admin/loyalty', 'PUT', { ...settings, every: 1 }, admin)).status).toBe(
@@ -1457,7 +1469,7 @@ describe.sequential('real PostgreSQL, HTTP and independent Nest instances', () =
         400,
       );
       expect((await call('/admin/loyalty', 'PUT', settings, admin)).status).toBe(200);
-      expect(((await call('/loyalty')).body as unknown as { loyalty: unknown }).loyalty).toEqual({
+      expect(((await call('/offers')).body as unknown as { loyalty: unknown }).loyalty).toEqual({
         every: 3,
         reward: 'стрижка в подарок',
       });

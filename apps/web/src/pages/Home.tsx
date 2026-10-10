@@ -24,7 +24,7 @@ import {
   WhatsAppIcon,
   WhatsAppLink,
 } from '../components';
-import { Gallery, PromoBanner, useGallery, useLoyalty } from '../site';
+import { Gallery, PromoBanner, useGallery, useOffers } from '../site';
 import { useT } from '../i18n';
 export function Home({ config }: { config: Config }) {
   const services = useServices(),
@@ -395,7 +395,7 @@ function Highlights({ config, services }: { config: Config; services?: Service[]
     ],
     [Wallet, t('Удобная оплата'), t('Наличными или Kaspi QR в салоне.')],
   ] as const;
-  const loyalty = useLoyalty().data;
+  const loyalty = useOffers().data?.loyalty;
   return (
     <ul className="highlights">
       {items.map(([Icon, title, text]) => (

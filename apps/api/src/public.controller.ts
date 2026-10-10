@@ -11,6 +11,7 @@ import { intlPhone } from './reminders';
 import { Clients } from './clients';
 import { Site } from './site';
 import { Loyalty } from './loyalty';
+import { Growth } from './growth';
 import { Push } from './push';
 import { VisitLinks } from './visit';
 @ApiTags('Публичные')
@@ -25,6 +26,7 @@ export class PublicController {
     private push: Push,
     private links: VisitLinks,
     private loyalty: Loyalty,
+    private growth: Growth,
   ) {}
   private requests = new Map<string, { count: number; until: number }>();
   @Get('config') @ApiOperation({ summary: 'Настройки салона' }) settings() {
@@ -127,10 +129,17 @@ export class PublicController {
       manageUrl: await this.links.url(a.id),
     };
   }
-  @Get('loyalty')
-  @ApiOperation({ summary: 'Бонусная программа: { loyalty: { every, reward } | null }' })
-  async loyaltyProgramme() {
-    return { loyalty: await this.loyalty.active() };
+  @Get('offers')
+  @ApiOperation({
+    summary:
+      'Включённые предложения: { loyalty: { every, reward } | null, birthdayDiscount: % | null }',
+  })
+  async offers() {
+    const { birthdayDiscount } = await this.growth.settings();
+    return {
+      loyalty: await this.loyalty.active(),
+      birthdayDiscount: birthdayDiscount > 0 ? birthdayDiscount : null,
+    };
   }
   @Get('promo') @ApiOperation({ summary: 'Баннер акции: { promo: {...} | null }' }) async promo() {
     // Wrapped: a bare null would be an empty response body.

@@ -20,12 +20,15 @@ export function usePromo() {
     staleTime: 5 * 60000,
   });
 }
-/** «Каждый N-й визит — подарок», or null when the salon has it off. */
-export function useLoyalty() {
+/** Offers the owner switched on in the admin; the site mentions no discount otherwise. */
+export function useOffers() {
   return useQuery({
-    queryKey: ['loyalty'],
+    queryKey: ['offers'],
     queryFn: () =>
-      api<{ loyalty: { every: number; reward: string } | null }>('/loyalty').then((r) => r.loyalty),
+      api<{
+        loyalty: { every: number; reward: string } | null;
+        birthdayDiscount: number | null;
+      }>('/offers'),
     staleTime: 5 * 60000,
   });
 }

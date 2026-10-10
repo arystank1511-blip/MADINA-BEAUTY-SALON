@@ -942,7 +942,7 @@ function Growth({ config }: { config: Config }) {
     mutationFn: (body: unknown) => send('/admin/growth', 'PUT', body),
     onSuccess: () => {
       setSaved(true);
-      void client.invalidateQueries({ queryKey: ['growth'] });
+      for (const key of ['growth', 'offers']) void client.invalidateQueries({ queryKey: [key] });
     },
   });
   if (q.isPending) return <Loading />;
@@ -965,7 +965,11 @@ function Growth({ config }: { config: Config }) {
           <h3>
             🎂 День рождения сегодня <span className="count">{birthdays.length}</span>
           </h3>
-          <p className="caption">Поздравление со скидкой {settings.birthdayDiscount}% на неделю.</p>
+          <p className="caption">
+            {settings.birthdayDiscount
+              ? `Поздравление со скидкой ${settings.birthdayDiscount}% на неделю.`
+              : 'Поздравление без скидки (скидку можно включить в настройках ниже).'}
+          </p>
           <div className="table-wrap">
             <table>
               <tbody>
@@ -1039,7 +1043,7 @@ function Growth({ config }: { config: Config }) {
           />
         </label>
         <label>
-          Скидка в день рождения, %
+          Скидка в день рождения, % (0 — выключена, на сайте о ней не пишем)
           <input
             name="birthdayDiscount"
             type="number"
@@ -1119,7 +1123,7 @@ function LoyaltyForm() {
     mutationFn: (body: LoyaltySettings) => send('/admin/loyalty', 'PUT', body),
     onSuccess: () => {
       setSaved(true);
-      for (const key of ['loyalty-settings', 'loyalty', 'day'])
+      for (const key of ['loyalty-settings', 'offers', 'day'])
         void client.invalidateQueries({ queryKey: [key] });
     },
   });
@@ -1142,8 +1146,9 @@ function LoyaltyForm() {
     >
       <h3>🎁 Бонусы постоянным клиентам</h3>
       <p className="caption">
-        Визиты считаются по номеру телефона. На сайте появится «Каждый {s.every}-й визит —{' '}
-        {s.reward}», а в «Мой день» у такого визита будет значок 🎁.
+        Пока выключено, на сайте о бонусах ничего нет. Визиты считаются по номеру телефона. Когда
+        включите, на сайте появится «Каждый {s.every}-й визит — {s.reward}», а в «Мой день» у такого
+        визита будет значок 🎁.
       </p>
       <label className="checkbox">
         <input name="enabled" type="checkbox" defaultChecked={s.enabled} /> Включить
