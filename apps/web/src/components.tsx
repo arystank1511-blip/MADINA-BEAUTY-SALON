@@ -8,13 +8,15 @@ export function ButtonLink({
   to,
   children,
   secondary = false,
+  tabIndex,
 }: {
   to: string;
   children: ReactNode;
   secondary?: boolean;
+  tabIndex?: number;
 }) {
   return (
-    <Link className={`button ${secondary ? 'secondary' : ''}`} to={to}>
+    <Link className={`button ${secondary ? 'secondary' : ''}`} to={to} tabIndex={tabIndex}>
       {children}
       <Arrow />
     </Link>
@@ -41,12 +43,16 @@ export function WhatsAppLink({
   children,
   className = 'button whatsapp',
   onClick,
+  tabIndex,
+  'aria-label': label,
 }: {
   config: Config;
   text?: string;
   children: ReactNode;
   className?: string;
   onClick?: () => void;
+  tabIndex?: number;
+  'aria-label'?: string;
 }) {
   return (
     <a
@@ -55,6 +61,8 @@ export function WhatsAppLink({
       target="_blank"
       rel="noopener noreferrer"
       onClick={onClick}
+      tabIndex={tabIndex}
+      aria-label={label}
     >
       <WhatsAppIcon />
       {children}

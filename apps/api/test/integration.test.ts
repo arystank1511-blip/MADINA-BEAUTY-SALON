@@ -1155,6 +1155,19 @@ describe.sequential('real PostgreSQL, HTTP and independent Nest instances', () =
       await db.setting.deleteMany({ where: { key: 'promo' } });
     }
   });
+  it('session check answers guests with { user: null } instead of 401', async () => {
+    const guest = await call('/auth/session');
+    expect(guest.status).toBe(200);
+    expect(guest.body).toEqual({ user: null });
+    expect((await call('/auth/session', 'GET', undefined, 'forma_session=bogus')).body).toEqual({
+      user: null,
+    });
+    const me = (await call('/auth/session', 'GET', undefined, admin)).body as unknown as {
+      user: { role: string; passwordHash?: string };
+    };
+    expect(me.user.role).toBe('ADMIN');
+    expect(me.user.passwordHash).toBeUndefined();
+  });
   it('rate limits abusive client without blocking another behind the trusted proxy', async () => {
     const attempt = async (ip: string) =>
       fetch(urls[0] + '/api/v1/auth/login', {

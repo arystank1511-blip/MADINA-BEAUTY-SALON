@@ -139,6 +139,17 @@ export class AuthController {
       req,
     );
   }
+  @Get('session')
+  @ApiOperation({ summary: 'Текущий пользователь или null — без 401 для гостей сайта' })
+  async current(@Req() req: Request) {
+    const token = (req.cookies as Record<string, string> | undefined)?.forma_session;
+    if (!token) return { user: null };
+    const session = await this.db.session.findUnique({
+      where: { tokenHash: digest(token) },
+      include: { user: { select: safeUser } },
+    });
+    return { user: session && session.expiresAt > new Date() ? session.user : null };
+  }
   @Get('me')
   @UseGuards(SessionGuard)
   @ApiCookieAuth()

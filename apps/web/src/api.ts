@@ -166,11 +166,8 @@ export const send = <T>(path: string, method: string, body: unknown = {}) =>
 export function useMe() {
   return useQuery({
     queryKey: ['me'],
-    queryFn: () =>
-      api<User>('/auth/me').catch((e) => {
-        if (e instanceof ApiError && e.status === 401) return null;
-        throw e;
-      }),
+    // /auth/session answers guests with { user: null } instead of a 401 in the console.
+    queryFn: () => api<{ user: User | null }>('/auth/session').then((r) => r.user),
     retry: false,
   });
 }

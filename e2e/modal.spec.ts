@@ -41,9 +41,9 @@ test('Escape respects an in-flight cancellation, then closes and restores focus'
           demo: false,
         },
       });
-    if (path.endsWith('/auth/me'))
+    if (path.endsWith('/auth/session'))
       return route.fulfill({
-        json: { id: 'admin', name: 'Админ', email: 'admin@example.com', role: 'ADMIN' },
+        json: { user: { id: 'admin', name: 'Админ', email: 'admin@example.com', role: 'ADMIN' } },
       });
     if (path.endsWith('/admin/masters')) return route.fulfill({ json: [] });
     if (path.endsWith('/admin/appointments'))
