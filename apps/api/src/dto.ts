@@ -200,6 +200,26 @@ export class WhatsAppSettingsDto {
     message: 'Имя шаблона — латиница в нижнем регистре, цифры и «_».',
   })
   templateName!: string;
+  @ApiProperty({
+    required: false,
+    description: 'Шаблон просьбы об отзыве: {{1}} имя, {{2}} ссылка',
+  })
+  @IsOptional()
+  @IsString()
+  @Matches(/^[a-z0-9_]{0,512}$/, {
+    message: 'Имя шаблона — латиница в нижнем регистре, цифры и «_».',
+  })
+  reviewTemplate?: string;
+  @ApiProperty({
+    required: false,
+    description: 'Шаблон «пора подстричься»: {{1}} имя, {{2}} ссылка',
+  })
+  @IsOptional()
+  @IsString()
+  @Matches(/^[a-z0-9_]{0,512}$/, {
+    message: 'Имя шаблона — латиница в нижнем регистре, цифры и «_».',
+  })
+  returnTemplate?: string;
   @ApiProperty({ description: 'Язык шаблона, например ru' })
   @IsString()
   @Matches(/^[a-z]{2,3}(_[A-Z]{2})?$/, { message: 'Код языка, например ru или en_US.' })
@@ -210,4 +230,16 @@ export class WhatsAppTestDto {
   @IsString()
   @Length(10, 30)
   phone!: string;
+}
+export class GrowthSettingsDto {
+  @ApiProperty({ description: 'Ссылка на отзывы, например карточка 2GIS' })
+  @IsString()
+  @Matches(/^https:\/\/\S{3,500}$/, { message: 'Ссылка должна начинаться с https://' })
+  reviewUrl!: string;
+  @ApiProperty({ description: 'Через сколько недель после визита приглашать снова' })
+  @Type(() => Number)
+  @IsInt()
+  @Min(2)
+  @Max(26)
+  returnWeeks!: number;
 }

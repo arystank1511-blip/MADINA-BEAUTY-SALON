@@ -17,6 +17,7 @@ import { Admin, AuthRequest, safeUser, SessionGuard } from '../auth/auth';
 import { Db } from '../db';
 import {
   AdminBookingDto,
+  GrowthSettingsDto,
   DayQuery,
   HoursDto,
   QuickBookingDto,
@@ -36,8 +37,10 @@ import { config } from '../config';
 import { fail } from '../errors';
 import { fitsSchedule, localInstant, salonDate, startOfDay } from '../availability/rules';
 import { Temporal } from '@js-temporal/polyfill';
+import { Prisma } from '@prisma/client';
 import { intlPhone, reminderParams, Reminders } from '../reminders';
 import { WhatsApp } from '../whatsapp';
+import { Growth } from '../growth';
 /** Comparable phone key: the last 10 digits, so +7 777…, 8 777… and 777… match. */
 export const phoneKey = (phone: string | null | undefined) => {
   const digits = (phone || '').replace(/\D/g, '');
@@ -54,6 +57,7 @@ export class AdminController {
     private booking: BookingService,
     private reminders: Reminders,
     private whatsapp: WhatsApp,
+    private growth: Growth,
   ) {}
   private async schedule<T>(id: string, mutate: (tx: Tx) => Promise<T>) {
     return this.db.$transaction(
@@ -395,6 +399,44 @@ export class AdminController {
       include: appointmentInclude,
       orderBy: { startsAt: 'asc' },
     });
+  }
+  @Get('growth')
+  @ApiOperation({ summary: 'Кого попросить об отзыве и кого пригласить снова' })
+  async growthLists() {
+    const now = new Date();
+    const settings = await this.growth.settings();
+    const [reviews, returns] = await Promise.all([
+      this.growth.reviewsDue(now),
+      this.growth.returnsDue(now, settings.returnWeeks),
+    ]);
+    return {
+      settings,
+      reviews: reviews.map((a) => ({
+        ...a,
+        text: this.growth.reviewText(a.guestName, settings.reviewUrl),
+      })),
+      returns: returns.map((a) => ({ ...a, text: this.growth.returnText(a.guestName) })),
+    };
+  }
+  @Put('growth')
+  @ApiOperation({ summary: 'Ссылка на отзывы и через сколько недель приглашать снова' })
+  growthSave(@Body() b: GrowthSettingsDto) {
+    return this.growth.save(b);
+  }
+  private async mark(id: string, data: Prisma.AppointmentUpdateManyMutationInput) {
+    const { count } = await this.db.appointment.updateMany({ where: { id }, data });
+    if (!count) fail(404, 'NOT_FOUND', 'Запись не найдена.');
+    return { id, ...data };
+  }
+  @Patch('appointments/:id/review-requested')
+  @ApiOperation({ summary: 'Отметить, что клиента попросили об отзыве' })
+  reviewRequested(@Param('id', ParseUUIDPipe) id: string) {
+    return this.mark(id, { reviewRequestedAt: new Date() });
+  }
+  @Patch('appointments/:id/invited')
+  @ApiOperation({ summary: 'Отметить, что клиента пригласили снова' })
+  invited(@Param('id', ParseUUIDPipe) id: string) {
+    return this.mark(id, { invitedAt: new Date() });
   }
   @Get('whatsapp')
   @ApiOperation({ summary: 'Настройки WhatsApp Business API (токен не возвращается)' })

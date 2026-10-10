@@ -754,6 +754,134 @@ describe.sequential('real PostgreSQL, HTTP and independent Nest instances', () =
       meta.close();
     }
   });
+  it('review requests and «пора подстричься» lists; automatic templates via WhatsApp API', async () => {
+    const { createServer } = await import('node:http');
+    const calls: {
+      to: string;
+      template: { name: string; components: { parameters: { text: string }[] }[] };
+    }[] = [];
+    const meta = createServer((req, res) => {
+      let raw = '';
+      req.on('data', (chunk) => (raw += chunk));
+      req.on('end', () => {
+        calls.push(JSON.parse(raw));
+        res.setHeader('content-type', 'application/json').end('{"messages":[{"id":"x"}]}');
+      });
+    });
+    await new Promise<void>((resolve) => meta.listen(0, '127.0.0.1', resolve));
+    process.env.WHATSAPP_API_URL = `http://127.0.0.1:${(meta.address() as { port: number }).port}`;
+    const tag = String(Math.floor(Math.random() * 1e6)).padStart(6, '0');
+    const phone = (n: number) => `+7 70${n} ${tag.slice(0, 3)} ${tag.slice(3)} 0`;
+    const created: string[] = [];
+    const visit = async (
+      n: number,
+      hoursAgo: number,
+      status: 'COMPLETED' | 'CONFIRMED',
+      extra = {},
+    ) => {
+      const startsAt = new Date(Math.floor(Date.now() / 60000 - hoursAgo * 60) * 60000);
+      const a = await db.appointment.create({
+        data: {
+          masterId: master2,
+          serviceId: service,
+          guestName: `Клиент ${n}`,
+          guestPhone: phone(n),
+          serviceName: 'Тестовая стрижка',
+          priceMinor: 500000,
+          durationMinutes: 30,
+          bufferAfterMinutes: 0,
+          startsAt,
+          endsAt: new Date(+startsAt + 30 * 60000),
+          occupiedUntil: new Date(+startsAt + 30 * 60000),
+          status,
+          ...extra,
+        },
+      });
+      created.push(a.id);
+      return a;
+    };
+    const weeks6 = 6 * 7 * 24;
+    try {
+      expect(
+        (await call('/admin/growth', 'PUT', { reviewUrl: 'http://x', returnWeeks: 5 }, admin))
+          .status,
+      ).toBe(400);
+      expect(
+        (
+          await call(
+            '/admin/growth',
+            'PUT',
+            { reviewUrl: 'https://2gis.kz/firm/1', returnWeeks: 5 },
+            admin,
+          )
+        ).status,
+      ).toBe(200);
+      const reviewed = await visit(1, 3, 'COMPLETED');
+      const away = await visit(2, weeks6, 'COMPLETED');
+      await visit(3, weeks6 + 1, 'COMPLETED');
+      await visit(3, -50, 'CONFIRMED'); // already booked again
+      await visit(4, weeks6 + 2, 'COMPLETED', { invitedAt: new Date() });
+      await visit(5, 24 * 7, 'COMPLETED'); // recent visit: not due yet
+      type Lists = {
+        reviews: { id: string; text: string }[];
+        returns: { id: string; guestPhone: string; text: string }[];
+      };
+      const lists = async () =>
+        (await call('/admin/growth', 'GET', undefined, admin)).body as unknown as Lists;
+      let l = await lists();
+      expect(l.reviews.map((r) => r.id)).toContain(reviewed.id);
+      expect(l.reviews.find((r) => r.id === reviewed.id)?.text).toContain('https://2gis.kz/firm/1');
+      const mine = (r: { guestPhone: string }) => r.guestPhone.includes(tag.slice(3));
+      expect(l.returns.filter(mine).map((r) => r.id)).toEqual([away.id]);
+      expect(l.returns.find((r) => r.id === away.id)?.text).toContain('/book');
+      expect((await call(`/admin/appointments/${away.id}/invited`, 'PATCH', {}, c1)).status).toBe(
+        403,
+      );
+      expect(
+        (await call(`/admin/appointments/${away.id}/invited`, 'PATCH', {}, admin)).status,
+      ).toBe(200);
+      l = await lists();
+      expect(l.returns.filter(mine)).toHaveLength(0);
+
+      // Automatic: the review template goes out once per visit.
+      await call(
+        '/admin/whatsapp',
+        'PUT',
+        {
+          enabled: true,
+          phoneNumberId: '1',
+          accessToken: 'token',
+          templateName: 'reminder_1h',
+          reviewTemplate: 'review_request',
+          returnTemplate: '',
+          language: 'ru',
+        },
+        admin,
+      );
+      await call('/cron/reminders');
+      await call('/cron/reminders');
+      const toReviewed = calls.filter(
+        (c) => c.to === '7701' + tag.slice(0, 3) + tag.slice(3) + '0',
+      );
+      expect(toReviewed).toHaveLength(1);
+      expect(toReviewed[0].template.name).toBe('review_request');
+      expect(toReviewed[0].template.components[0].parameters.map((p) => p.text)).toEqual([
+        'Клиент 1',
+        'https://2gis.kz/firm/1',
+      ]);
+      expect(
+        (await db.appointment.findUniqueOrThrow({ where: { id: reviewed.id } })).reviewRequestedAt,
+      ).not.toBe(null);
+    } finally {
+      await db.appointment.updateMany({
+        where: { id: { in: created } },
+        data: { status: 'CANCELLED', cancelledAt: new Date() },
+      });
+      await db.setting.deleteMany({ where: { key: { in: ['whatsapp', 'growth'] } } });
+      delete process.env.WHATSAPP_API_URL;
+      meta.close();
+    }
+  });
   it('rate limits abusive client without blocking another behind the trusted proxy', async () => {
     const attempt = async (ip: string) =>
       fetch(urls[0] + '/api/v1/auth/login', {

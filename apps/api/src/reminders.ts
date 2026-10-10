@@ -6,6 +6,7 @@ import { fail } from './errors';
 import { Telegram } from './telegram';
 import { activeAt } from './booking/booking.service';
 import { WhatsApp } from './whatsapp';
+import { Growth } from './growth';
 import { salonDate, startOfDay } from './availability/rules';
 import { Prisma } from '@prisma/client';
 
@@ -46,6 +47,7 @@ export class Reminders {
     private db: Db,
     private telegram: Telegram,
     private whatsapp: WhatsApp,
+    private growth: Growth,
   ) {}
   private window(now: Date) {
     return { gt: now, lte: new Date(+now + REMIND_MINUTES * 60000) };
@@ -55,7 +57,8 @@ export class Reminders {
     const whatsapp = await this.remindClients(now);
     const sent = await this.alertSalon(now);
     const summary = await this.morningSummary(now);
-    return { sent, whatsapp, summary, completed };
+    const growth = await this.growth.autoSend(now);
+    return { sent, whatsapp, summary, completed, ...growth };
   }
   /**
    * Confirmed visits from earlier days become completed, so the history and statistics are

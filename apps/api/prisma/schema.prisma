@@ -130,6 +130,10 @@ model Appointment {
   waSentAt DateTime? @db.Timestamptz(3)
   /// Why the last automatic WhatsApp reminder failed, as reported by Meta.
   waError String?
+  /// When the client was asked for a review after this visit.
+  reviewRequestedAt DateTime? @db.Timestamptz(3)
+  /// When the client was invited back after this (their latest) visit.
+  invitedAt DateTime? @db.Timestamptz(3)
   customer User? @relation("Customer",fields:[customerId],references:[id],onDelete:Restrict)
   cancelledBy User? @relation("Canceller",fields:[cancelledById],references:[id])
   master Master @relation(fields:[masterId],references:[id])
@@ -137,6 +141,7 @@ model Appointment {
   @@index([customerId,startsAt])
   @@index([masterId,startsAt])
   @@index([status,startsAt])
+  @@index([guestPhone])
 }
 /// Salon settings edited in the admin, one JSON document per key (e.g. "whatsapp").
 model Setting {
