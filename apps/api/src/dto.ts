@@ -280,6 +280,56 @@ export class LoyaltyDto {
   @Length(2, 60)
   reward!: string;
 }
+export class ReviewDto {
+  @ApiProperty({ example: 'Айгерим' })
+  @Transform(({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value))
+  @IsString()
+  @Length(2, 60)
+  name!: string;
+  @ApiProperty()
+  @Transform(({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value))
+  @IsString()
+  @Length(2, 600)
+  text!: string;
+  @ApiProperty({ minimum: 1, maximum: 5 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(5)
+  rating!: number;
+}
+export class GiftCardDto {
+  @ApiProperty({ description: 'Сумма в тиынах (×100)', example: 1000000 })
+  @IsInt()
+  @Min(100)
+  @Max(100000000)
+  amountMinor!: number;
+  @ApiProperty({ example: 'Айгерим' })
+  @Transform(({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value))
+  @IsString()
+  @Length(2, 60)
+  recipient!: string;
+  @ApiProperty({ required: false, example: 'от мамы' })
+  @IsOptional()
+  @Transform(({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value))
+  @IsString()
+  @Length(0, 60)
+  sender?: string;
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  @Matches(/^[+\d\s()-]{0,30}$/)
+  phone?: string;
+  @ApiProperty({ description: 'Срок действия, месяцев', example: 3 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(12)
+  months!: number;
+}
+export class RedeemDto {
+  @ApiProperty() @IsBoolean() redeemed!: boolean;
+}
 export class PaymentDto {
   @ApiProperty({ description: 'Фактически оплачено, в минимальных единицах (тиын)' })
   @IsInt()

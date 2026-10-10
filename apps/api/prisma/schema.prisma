@@ -205,3 +205,25 @@ model WaitlistEntry {
   @@unique([date, phone])
   @@index([date])
 }
+/// A client review shown on the site; the owner copies them from 2GIS or WhatsApp.
+model Review {
+  id String @id @default(uuid()) @db.Uuid
+  name String
+  text String
+  rating Int
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  @@index([createdAt])
+}
+/// A gift certificate sold in the salon; its printable page is /gift/<code>.
+model GiftCard {
+  id String @id @default(uuid()) @db.Uuid
+  code String @unique
+  amountMinor Int
+  recipient String
+  sender String @default("")
+  phone String?
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  expiresAt DateTime @db.Timestamptz(3)
+  redeemedAt DateTime? @db.Timestamptz(3)
+  @@index([createdAt])
+}

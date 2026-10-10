@@ -3467,3 +3467,183 @@ tr.clickable:hover td {
   color: var(--muted);
   margin: -12px 0 28px;
 }
+/* Gift certificate */
+.gift-page {
+  max-width: 640px;
+}
+.gift-card {
+  position: relative;
+  padding: 40px 32px;
+  border: 1px solid var(--accent);
+  outline: 1px solid var(--line);
+  outline-offset: 8px;
+  background: var(--surface);
+  text-align: center;
+  margin: 24px 8px 40px;
+}
+.gift-card.inactive {
+  opacity: 0.6;
+}
+.gift-logo {
+  height: 40px;
+  margin-bottom: 20px;
+}
+.gift-amount {
+  font-size: clamp(44px, 12vw, 72px);
+  font-weight: 800;
+  margin: 8px 0 12px;
+}
+.gift-to {
+  font-size: 22px;
+  margin: 0 0 24px;
+}
+.gift-to span {
+  color: var(--muted);
+  font-size: 16px;
+}
+.gift-card dl {
+  display: flex;
+  justify-content: center;
+  gap: 40px;
+  margin: 0 0 24px;
+}
+.gift-card dt {
+  color: var(--muted);
+  font-size: 13px;
+}
+.gift-card dd {
+  margin: 4px 0 0;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+.gift-status {
+  color: var(--error);
+  font-weight: 700;
+}
+.gift-page .form-actions {
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.admin-reviews {
+  list-style: none;
+  padding: 0;
+  margin: 20px 0 0;
+}
+.admin-reviews li {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 0;
+  border-top: 1px solid var(--line);
+}
+.admin-reviews p {
+  margin: 6px 0 0;
+  color: var(--muted);
+}
+.stars {
+  color: #f5b301;
+  letter-spacing: 2px;
+}
+@media print {
+  :root {
+    --bg: #fff;
+    --surface: #fff;
+    --text: #000;
+    --muted: #444;
+    --line: #bbb;
+  }
+  body {
+    background: #fff;
+    color: #000;
+  }
+  header,
+  footer,
+  .whatsapp-float,
+  .mobile-cta,
+  .no-print {
+    display: none !important;
+  }
+  .gift-card {
+    break-inside: avoid;
+  }
+}
+.photo-price {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 18px;
+  align-items: center;
+  margin-top: 28px;
+  padding: 22px 24px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+.photo-price h3 {
+  margin: 0 0 4px;
+  font-size: 18px;
+}
+.photo-price p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+.reviews {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1px;
+  list-style: none;
+  padding: 0;
+  margin: 32px 0 0;
+  background: var(--line);
+  border: 1px solid var(--line);
+}
+.reviews li {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  padding: 26px;
+  background: var(--bg);
+}
+.reviews blockquote {
+  margin: 0;
+  line-height: 1.6;
+}
+.reviews cite {
+  font-style: normal;
+  color: var(--muted);
+  font-size: 14px;
+}
+.gift-cta {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 24px;
+  align-items: center;
+  padding: 32px;
+  border: 1px solid var(--accent);
+  background: var(--surface);
+}
+.gift-cta h2 {
+  margin: 0 0 8px;
+}
+.gift-cta .section-intro {
+  margin: 0;
+}
+@media (max-width: 700px) {
+  .photo-price,
+  .gift-cta {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .gift-cta {
+    padding: 24px;
+  }
+}
+.gift-card p {
+  color: var(--text);
+}
+.gift-card .eyebrow,
+.gift-card .caption {
+  color: var(--muted);
+}
+.reviews .stars {
+  display: flex;
+  gap: 3px;
+}

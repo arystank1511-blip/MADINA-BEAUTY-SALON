@@ -19,6 +19,7 @@ const Book = lazy(() => import('./pages/Book').then((m) => ({ default: m.Book })
 const Auth = lazy(() => import('./pages/Auth').then((m) => ({ default: m.Auth })));
 const Admin = lazy(() => import('./pages/Admin').then((m) => ({ default: m.Admin })));
 const Visit = lazy(() => import('./pages/Visit').then((m) => ({ default: m.Visit })));
+const Gift = lazy(() => import('./pages/Gift').then((m) => ({ default: m.Gift })));
 const MasterDay = lazy(() => import('./pages/MasterDay').then((m) => ({ default: m.MasterDay })));
 /** `admin`: owner only; `staff`: owner or master («Мой день»). */
 function Gate({
@@ -62,10 +63,13 @@ export function App() {
     } else window.scrollTo(0, 0);
   }, [location.pathname, location.hash]);
   useEffect(() => {
-    const items = document.querySelectorAll<HTMLElement>('.reveal:not(.visible)');
+    const pending = () => document.querySelectorAll<HTMLElement>('.reveal:not(.visible)');
     if (!('IntersectionObserver' in window)) {
-      items.forEach((el) => el.classList.add('visible'));
-      return;
+      const show = () => pending().forEach((el) => el.classList.add('visible'));
+      show();
+      const added = new MutationObserver(show);
+      added.observe(document.body, { childList: true, subtree: true });
+      return () => added.disconnect();
     }
     const observer = new IntersectionObserver(
       (entries) =>
@@ -76,8 +80,14 @@ export function App() {
         }),
       { rootMargin: '0px 0px -8% 0px', threshold: 0.05 },
     );
-    items.forEach((el) => observer.observe(el));
-    return () => observer.disconnect();
+    pending().forEach((el) => observer.observe(el));
+    // Sections that appear once their data loads (works, reviews) are observed too.
+    const added = new MutationObserver(() => pending().forEach((el) => observer.observe(el)));
+    added.observe(document.body, { childList: true, subtree: true });
+    return () => {
+      observer.disconnect();
+      added.disconnect();
+    };
   }, [location.pathname, settings.data]);
   useEffect(() => {
     if (!menu) return;
@@ -183,6 +193,14 @@ export function App() {
             element={
               <Suspense fallback={<Loading />}>
                 <Visit config={config} />
+              </Suspense>
+            }
+          />
+          <Route
+            path="/gift/:code"
+            element={
+              <Suspense fallback={<Loading />}>
+                <Gift config={config} />
               </Suspense>
             }
           />
