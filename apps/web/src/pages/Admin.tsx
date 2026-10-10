@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Temporal } from '@js-temporal/polyfill';
 import { Check } from 'lucide-react';
 import {
+  addDays,
   api,
   Appointment,
   clientName,
@@ -15,12 +16,14 @@ import {
   Service,
   timeLabel,
   TimeOff,
+  todayIn,
   useMasters,
   useServices,
   Window,
 } from '../api';
 import { ButtonLink, ErrorBox, Loading, Modal, WhatsAppIcon } from '../components';
 import { intl, minutesUntil, Remind, Reminded } from '../remind';
+import { methodNames, Paid, PaymentDialog } from '../payment';
 export const statusNames = {
   PENDING: 'Ждёт подтверждения',
   CONFIRMED: 'Подтверждена',
@@ -52,6 +55,7 @@ export function Admin({ config }: { config: Config }) {
       <nav className="tabs" aria-label="Разделы управления">
         {[
           'Записи',
+          'Статистика',
           'Напоминания',
           'Возврат клиентов',
           'WhatsApp',
@@ -72,6 +76,8 @@ export function Admin({ config }: { config: Config }) {
       </nav>
       {tab === 'Записи' ? (
         <Appointments config={config} />
+      ) : tab === 'Статистика' ? (
+        <Statistics config={config} />
       ) : tab === 'Напоминания' ? (
         <Reminders config={config} />
       ) : tab === 'Возврат клиентов' ? (
@@ -97,6 +103,7 @@ function Appointments({ config }: { config: Config }) {
       appointment: Appointment;
       type: 'cancel' | 'complete' | 'no-show' | 'confirm';
     } | null>(null);
+  const [paying, setPaying] = useState<Appointment | null>(null);
   const client = useQueryClient(),
     masters = useMasters(true);
   const queryString = new URLSearchParams({
@@ -196,7 +203,10 @@ function Appointments({ config }: { config: Config }) {
                         {a.serviceName}
                         <small>{a.master.name}</small>
                       </td>
-                      <td>{money(a.priceMinor, config.currency)}</td>
+                      <td>
+                        {money(a.priceMinor, config.currency)}
+                        <Paid a={a} config={config} />
+                      </td>
                       <td>
                         {expired(a) ? (
                           <span className="badge cancelled">Истекла, не подтвердили</span>
@@ -249,16 +259,12 @@ function Appointments({ config }: { config: Config }) {
                               Не пришёл
                             </button>
                           )}
-                        {a.status === 'CONFIRMED' && new Date(a.endsAt) <= new Date() && (
-                          <button
-                            onClick={() => {
-                              mutation.reset();
-                              setAction({ appointment: a, type: 'complete' });
-                            }}
-                          >
-                            Завершить
-                          </button>
-                        )}
+                        {(a.status === 'CONFIRMED' || a.status === 'COMPLETED') &&
+                          new Date(a.startsAt) <= new Date() && (
+                            <button onClick={() => setPaying(a)}>
+                              {a.paidMinor === null ? 'Оплата' : 'Изменить оплату'}
+                            </button>
+                          )}
                       </td>
                     </tr>
                   </Fragment>
@@ -283,6 +289,7 @@ function Appointments({ config }: { config: Config }) {
           </div>
         </>
       )}
+      {paying && <PaymentDialog a={paying} config={config} onClose={() => setPaying(null)} />}
       {action && (
         <Modal
           title={
@@ -410,6 +417,182 @@ function Reminders({ config }: { config: Config }) {
             </tbody>
           </table>
         </div>
+      )}
+    </>
+  );
+}
+interface StatsData {
+  from: string;
+  to: string;
+  completed: number;
+  noShows: number;
+  cancelled: number;
+  noShowRate: number;
+  revenueMinor: number;
+  averageMinor: number;
+  cashMinor: number;
+  kaspiMinor: number;
+  unpaid: number;
+  clients: number;
+  newClients: number;
+  days: { date: string; revenueMinor: number; visits: number }[];
+  services: { name: string; visits: number; revenueMinor: number }[];
+}
+/** Salon numbers for a period: revenue by day, payments, services and clients. */
+function Statistics({ config }: { config: Config }) {
+  const today = todayIn(config.timezone);
+  const monthStart = today.slice(0, 8) + '01';
+  const lastMonthEnd = addDays(monthStart, -1);
+  const presets = [
+    { label: 'Сегодня', from: today, to: today },
+    { label: '7 дней', from: addDays(today, -6), to: today },
+    { label: 'Этот месяц', from: monthStart, to: today },
+    { label: 'Прошлый месяц', from: lastMonthEnd.slice(0, 8) + '01', to: lastMonthEnd },
+  ];
+  const [range, setRange] = useState(presets[2]);
+  const q = useQuery({
+    queryKey: ['stats', range.from, range.to],
+    queryFn: () => api<StatsData>(`/admin/stats?from=${range.from}&to=${range.to}`),
+  });
+  const m = (v: number) => money(v, config.currency);
+  const s = q.data;
+  const peak = s ? Math.max(...s.days.map((d) => d.revenueMinor), 1) : 1;
+  const short = (date: string) =>
+    new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'short', timeZone: 'UTC' }).format(
+      new Date(date + 'T12:00:00Z'),
+    );
+  return (
+    <>
+      <div className="filters stats-range">
+        <div className="segmented" role="group" aria-label="Период">
+          {presets.map((p) => (
+            <button
+              key={p.label}
+              aria-pressed={range.from === p.from && range.to === p.to}
+              onClick={() => setRange(p)}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+        <label>
+          С даты
+          <input
+            type="date"
+            value={range.from}
+            max={range.to}
+            onChange={(e) =>
+              e.target.value && setRange({ ...range, label: '', from: e.target.value })
+            }
+          />
+        </label>
+        <label>
+          По дату
+          <input
+            type="date"
+            value={range.to}
+            min={range.from}
+            onChange={(e) =>
+              e.target.value && setRange({ ...range, label: '', to: e.target.value })
+            }
+          />
+        </label>
+      </div>
+      {q.isPending ? (
+        <Loading />
+      ) : q.error ? (
+        <ErrorBox error={q.error} retry={() => void q.refetch()} />
+      ) : (
+        s && (
+          <>
+            <div className="stat-tiles">
+              <div className="stat-tile">
+                <span>Выручка</span>
+                <strong>{m(s.revenueMinor)}</strong>
+                {s.unpaid > 0 && (
+                  <small>
+                    {s.unpaid} {s.unpaid === 1 ? 'визит' : 'визитов'} без отметки оплаты — по прайсу
+                  </small>
+                )}
+              </div>
+              <div className="stat-tile">
+                <span>Визитов</span>
+                <strong>{s.completed}</strong>
+                <small>Средний чек {m(s.averageMinor)}</small>
+              </div>
+              <div className="stat-tile">
+                <span>Клиентов</span>
+                <strong>{s.clients}</strong>
+                <small>Новых: {s.newClients}</small>
+              </div>
+              <div className="stat-tile">
+                <span>Не пришли</span>
+                <strong>{s.noShows}</strong>
+                <small>
+                  {Math.round(s.noShowRate * 100)}% визитов · отмен: {s.cancelled}
+                </small>
+              </div>
+            </div>
+            <div className="stat-tiles two">
+              <div className="stat-tile">
+                <span>Наличные</span>
+                <strong>{m(s.cashMinor)}</strong>
+              </div>
+              <div className="stat-tile">
+                <span>{methodNames.KASPI}</span>
+                <strong>{m(s.kaspiMinor)}</strong>
+              </div>
+            </div>
+            {s.days.length > 1 && (
+              <figure className="panel day-chart">
+                <figcaption>Выручка по дням</figcaption>
+                <div className="bars" role="list">
+                  {s.days.map((d) => (
+                    <div
+                      key={d.date}
+                      className="bar"
+                      role="listitem"
+                      tabIndex={0}
+                      aria-label={`${short(d.date)}: ${m(d.revenueMinor)}, визитов ${d.visits}`}
+                      data-tip={`${short(d.date)} · ${m(d.revenueMinor)} · визитов: ${d.visits}`}
+                    >
+                      <i style={{ height: `${(d.revenueMinor / peak) * 100}%` }} />
+                    </div>
+                  ))}
+                </div>
+                <div className="bars-axis">
+                  <span>{short(s.days[0].date)}</span>
+                  <span>{short(s.days[s.days.length - 1].date)}</span>
+                </div>
+              </figure>
+            )}
+            <h3>Услуги</h3>
+            {!s.services.length ? (
+              <div className="empty">За этот период завершённых визитов нет.</div>
+            ) : (
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Услуга</th>
+                      <th>Визитов</th>
+                      <th>Выручка</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {s.services.map((v) => (
+                      <tr key={v.name}>
+                        <td>{v.name}</td>
+                        <td>{v.visits}</td>
+                        <td>{m(v.revenueMinor)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </>
+        )
       )}
     </>
   );

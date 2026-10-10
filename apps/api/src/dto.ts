@@ -243,3 +243,23 @@ export class GrowthSettingsDto {
   @Max(26)
   returnWeeks!: number;
 }
+export class PaymentDto {
+  @ApiProperty({ description: 'Фактически оплачено, в минимальных единицах (тиын)' })
+  @IsInt()
+  @Min(0)
+  @Max(100000000)
+  paidMinor!: number;
+  @ApiProperty({ enum: ['CASH', 'KASPI'] })
+  @IsIn(['CASH', 'KASPI'])
+  paymentMethod!: 'CASH' | 'KASPI';
+}
+export class StatsQuery {
+  @ApiProperty({ required: false, example: '2026-10-01' })
+  @IsOptional()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  from?: string;
+  @ApiProperty({ required: false, example: '2026-10-31' })
+  @IsOptional()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  to?: string;
+}

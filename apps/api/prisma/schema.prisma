@@ -134,6 +134,10 @@ model Appointment {
   reviewRequestedAt DateTime? @db.Timestamptz(3)
   /// When the client was invited back after this (their latest) visit.
   invitedAt DateTime? @db.Timestamptz(3)
+  /// What the client actually paid (prices are «от»), in minor units; null until recorded.
+  paidMinor Int?
+  /// CASH or KASPI.
+  paymentMethod String?
   customer User? @relation("Customer",fields:[customerId],references:[id],onDelete:Restrict)
   cancelledBy User? @relation("Canceller",fields:[cancelledById],references:[id])
   master Master @relation(fields:[masterId],references:[id])

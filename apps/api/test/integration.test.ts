@@ -882,6 +882,92 @@ describe.sequential('real PostgreSQL, HTTP and independent Nest instances', () =
       meta.close();
     }
   });
+  it('records payments and reports revenue, services and clients for a period', async () => {
+    const day = Temporal.PlainDate.from(salonDate(new Date(), 'Asia/Almaty')).subtract({
+      days: 400,
+    });
+    const date = day.toString();
+    const tag = String(Math.floor(Math.random() * 1e6)).padStart(6, '0');
+    const created: string[] = [];
+    const visit = async (time: string, n: number, extra: Record<string, unknown> = {}) => {
+      const startsAt = localInstant(date, time, 'Asia/Almaty');
+      const a = await db.appointment.create({
+        data: {
+          masterId: master2,
+          serviceId: service,
+          guestName: `Касса ${n}`,
+          guestPhone: `+7 702 ${tag} ${n}`.slice(0, 20),
+          serviceName: n === 3 ? 'Укладка' : 'Тестовая стрижка',
+          priceMinor: 250000,
+          durationMinutes: 30,
+          bufferAfterMinutes: 0,
+          startsAt,
+          endsAt: new Date(+startsAt + 30 * 60000),
+          occupiedUntil: new Date(+startsAt + 30 * 60000),
+          ...extra,
+        },
+      });
+      created.push(a.id);
+      return a;
+    };
+    try {
+      const paid = await visit('10:00', 1);
+      const kaspi = await visit('11:00', 2, { status: 'COMPLETED' });
+      await visit('12:00', 3, { status: 'COMPLETED' }); // no payment recorded: list price counts
+      await visit('13:00', 4, { status: 'NO_SHOW' });
+      const pay = (id: string, body: unknown, cookie = admin) =>
+        call(`/admin/appointments/${id}/payment`, 'PATCH', body, cookie);
+      expect((await pay(paid.id, { paidMinor: 300000, paymentMethod: 'CASH' }, c1)).status).toBe(
+        403,
+      );
+      expect((await pay(paid.id, { paidMinor: -1, paymentMethod: 'CASH' })).status).toBe(400);
+      expect((await pay(paid.id, { paidMinor: 300000, paymentMethod: 'CARD' })).status).toBe(400);
+      const r = await pay(paid.id, { paidMinor: 300000, paymentMethod: 'CASH' });
+      expect(r.body.status).toBe('COMPLETED');
+      await pay(kaspi.id, { paidMinor: 400000, paymentMethod: 'KASPI' });
+      // A future visit cannot be paid yet.
+      const ahead = new Date(Math.ceil(Date.now() / 60000 + 600 * 24 * 60) * 60000);
+      const future = await db.appointment.create({
+        data: {
+          masterId: master2,
+          serviceId: service,
+          guestName: 'Будущий',
+          serviceName: 'Тестовая стрижка',
+          priceMinor: 250000,
+          durationMinutes: 30,
+          bufferAfterMinutes: 0,
+          startsAt: ahead,
+          endsAt: new Date(+ahead + 30 * 60000),
+          occupiedUntil: new Date(+ahead + 30 * 60000),
+        },
+      });
+      created.push(future.id);
+      expect((await pay(future.id, { paidMinor: 1, paymentMethod: 'CASH' })).status).toBe(409);
+
+      const s = (await call(`/admin/stats?from=${date}&to=${date}`, 'GET', undefined, admin))
+        .body as unknown as Record<string, unknown> & {
+        services: { name: string; visits: number }[];
+      };
+      expect(s).toMatchObject({
+        completed: 3,
+        noShows: 1,
+        revenueMinor: 300000 + 400000 + 250000,
+        cashMinor: 300000,
+        kaspiMinor: 400000,
+        unpaid: 1,
+        clients: 3,
+        newClients: 3,
+        noShowRate: 0.25,
+      });
+      expect(s.services[0]).toMatchObject({ name: 'Тестовая стрижка', visits: 2 });
+      expect(
+        (await call('/admin/stats?from=2026-02-01&to=2026-01-01', 'GET', undefined, admin)).status,
+      ).toBe(400);
+      expect((await call('/admin/stats', 'GET', undefined, c1)).status).toBe(403);
+    } finally {
+      await db.appointment.deleteMany({ where: { id: { in: created } } });
+    }
+  });
   it('rate limits abusive client without blocking another behind the trusted proxy', async () => {
     const attempt = async (ip: string) =>
       fetch(urls[0] + '/api/v1/auth/login', {

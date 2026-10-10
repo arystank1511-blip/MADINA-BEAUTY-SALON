@@ -47,6 +47,8 @@ export interface Appointment {
   remindedAt: string | null;
   waSentAt: string | null;
   waError: string | null;
+  paidMinor: number | null;
+  paymentMethod: 'CASH' | 'KASPI' | null;
   serviceName: string;
   priceMinor: number;
   durationMinutes: number;

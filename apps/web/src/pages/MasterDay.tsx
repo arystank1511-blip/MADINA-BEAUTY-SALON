@@ -17,6 +17,7 @@ import {
 } from '../api';
 import { ErrorBox, Loading, Modal, WhatsAppIcon } from '../components';
 import { intl, minutesUntil, Remind, Reminded } from '../remind';
+import { Paid, PaymentDialog } from '../payment';
 
 interface Span {
   start: string;
@@ -89,6 +90,7 @@ export function MasterDay({ config }: { config: Config }) {
   const [adding, setAdding] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState<Appointment | null>(null);
   const [missing, setMissing] = useState<Appointment | null>(null);
+  const [paying, setPaying] = useState<Appointment | null>(null);
   const client = useQueryClient();
   const day = useQuery({
     queryKey: ['day', date],
@@ -255,9 +257,14 @@ export function MasterDay({ config }: { config: Config }) {
                       </div>
                     ) : r.visit.status === 'COMPLETED' ? (
                       <div className="md-actions">
-                        <button className="md-btn ghost" onClick={() => setMissing(r.visit)}>
-                          ✕ Не пришёл
+                        <button className="md-btn pay" onClick={() => setPaying(r.visit)}>
+                          {r.visit.paidMinor === null ? '₸ Оплата' : 'Изменить оплату'}
                         </button>
+                        {r.visit.paidMinor === null && (
+                          <button className="md-btn ghost" onClick={() => setMissing(r.visit)}>
+                            ✕ Не пришёл
+                          </button>
+                        )}
                       </div>
                     ) : (
                       r.visit.status === 'CONFIRMED' &&
@@ -270,6 +277,9 @@ export function MasterDay({ config }: { config: Config }) {
                         </div>
                       ) : (
                         <div className="md-actions">
+                          <button className="md-btn pay" onClick={() => setPaying(r.visit)}>
+                            ₸ Оплата
+                          </button>
                           <button className="md-btn ghost" onClick={() => setMissing(r.visit)}>
                             ✕ Не пришёл
                           </button>
@@ -309,6 +319,7 @@ export function MasterDay({ config }: { config: Config }) {
           }}
         />
       )}
+      {paying && <PaymentDialog a={paying} config={config} onClose={() => setPaying(null)} />}
       {missing && (
         <Modal title="Клиент не пришёл?" onClose={() => !decide.isPending && setMissing(null)}>
           <p className="md-confirm-text">
@@ -388,6 +399,7 @@ function Visit({
       <h3>{clientName(a)}</h3>
       <p>{a.serviceName}</p>
       <Reminded a={a} config={config} />
+      <Paid a={a} config={config} />
       {missed > 0 && a.status !== 'NO_SHOW' && (
         <p className="md-warn">
           ⚠ Уже не приходил(а): {missed} {missed === 1 ? 'раз' : missed < 5 ? 'раза' : 'раз'}.
