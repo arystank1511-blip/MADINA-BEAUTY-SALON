@@ -3825,12 +3825,6 @@ table.compact th {
   letter-spacing: 0.14em;
   text-transform: uppercase;
 }
-.gc .gc-terms {
-  margin: 12px 0 0;
-  color: var(--ink-soft);
-  font-size: 10px;
-  line-height: 1.5;
-}
 .gc-stamp {
   position: absolute;
   top: 38%;
