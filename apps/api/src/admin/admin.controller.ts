@@ -18,6 +18,8 @@ import { Db } from '../db';
 import {
   AdminBookingDto,
   GrowthSettingsDto,
+  PaymentDto,
+  StatsQuery,
   DayQuery,
   HoursDto,
   QuickBookingDto,
@@ -41,6 +43,7 @@ import { Prisma } from '@prisma/client';
 import { intlPhone, reminderParams, Reminders } from '../reminders';
 import { WhatsApp } from '../whatsapp';
 import { Growth } from '../growth';
+import { Stats } from '../stats';
 /** Comparable phone key: the last 10 digits, so +7 777…, 8 777… and 777… match. */
 export const phoneKey = (phone: string | null | undefined) => {
   const digits = (phone || '').replace(/\D/g, '');
@@ -58,6 +61,7 @@ export class AdminController {
     private reminders: Reminders,
     private whatsapp: WhatsApp,
     private growth: Growth,
+    private stats: Stats,
   ) {}
   private async schedule<T>(id: string, mutate: (tx: Tx) => Promise<T>) {
     return this.db.$transaction(
@@ -398,6 +402,26 @@ export class AdminController {
       },
       include: appointmentInclude,
       orderBy: { startsAt: 'asc' },
+    });
+  }
+  @Get('stats')
+  @ApiOperation({ summary: 'Статистика за период: визиты, выручка, услуги, клиенты' })
+  statistics(@Query() q: StatsQuery) {
+    return this.stats.period(q.from, q.to);
+  }
+  @Patch('appointments/:id/payment')
+  @ApiOperation({ summary: 'Оплата визита: сумма и способ; визит становится завершённым' })
+  async payment(@Param('id', ParseUUIDPipe) id: string, @Body() b: PaymentDto) {
+    const a = await this.db.appointment.findUnique({ where: { id } });
+    if (!a) fail(404, 'NOT_FOUND', 'Запись не найдена.');
+    if (a.status !== 'CONFIRMED' && a.status !== 'COMPLETED')
+      fail(409, 'INVALID_STATUS', 'Оплату можно отметить только у подтверждённого визита.');
+    if (a.startsAt > new Date())
+      fail(409, 'INVALID_STATUS', 'Оплату можно отметить после начала визита.');
+    return this.db.appointment.update({
+      where: { id },
+      data: { status: 'COMPLETED', paidMinor: b.paidMinor, paymentMethod: b.paymentMethod },
+      include: appointmentInclude,
     });
   }
   @Get('growth')
