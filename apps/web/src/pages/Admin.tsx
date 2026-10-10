@@ -19,8 +19,8 @@ import {
   useServices,
   Window,
 } from '../api';
-import { ButtonLink, ErrorBox, Loading, Modal } from '../components';
-import { minutesUntil, Remind, Reminded } from '../remind';
+import { ButtonLink, ErrorBox, Loading, Modal, WhatsAppIcon } from '../components';
+import { intl, minutesUntil, Remind, Reminded } from '../remind';
 export const statusNames = {
   PENDING: 'Ждёт подтверждения',
   CONFIRMED: 'Подтверждена',
@@ -50,23 +50,32 @@ export function Admin({ config }: { config: Config }) {
         </div>
       </div>
       <nav className="tabs" aria-label="Разделы управления">
-        {['Записи', 'Напоминания', 'WhatsApp', 'Услуги', 'Мастера', 'Расписание', 'Пароль'].map(
-          (t) => (
-            <button
-              key={t}
-              aria-current={tab === t ? 'page' : undefined}
-              className={tab === t ? 'active' : ''}
-              onClick={() => setTab(t)}
-            >
-              {t}
-            </button>
-          ),
-        )}
+        {[
+          'Записи',
+          'Напоминания',
+          'Возврат клиентов',
+          'WhatsApp',
+          'Услуги',
+          'Мастера',
+          'Расписание',
+          'Пароль',
+        ].map((t) => (
+          <button
+            key={t}
+            aria-current={tab === t ? 'page' : undefined}
+            className={tab === t ? 'active' : ''}
+            onClick={() => setTab(t)}
+          >
+            {t}
+          </button>
+        ))}
       </nav>
       {tab === 'Записи' ? (
         <Appointments config={config} />
       ) : tab === 'Напоминания' ? (
         <Reminders config={config} />
+      ) : tab === 'Возврат клиентов' ? (
+        <Growth config={config} />
       ) : tab === 'WhatsApp' ? (
         <WhatsAppApi config={config} />
       ) : tab === 'Услуги' ? (
@@ -405,10 +414,193 @@ function Reminders({ config }: { config: Config }) {
     </>
   );
 }
+interface GrowthVisit {
+  id: string;
+  guestName: string | null;
+  guestPhone: string;
+  serviceName: string;
+  startsAt: string;
+  visits?: number;
+  text: string;
+}
+interface GrowthData {
+  settings: { reviewUrl: string; returnWeeks: number };
+  reviews: GrowthVisit[];
+  returns: GrowthVisit[];
+}
+/** WhatsApp link with a ready text; opening it marks the visit so it leaves the list. */
+function SendWhatsApp({ v, mark, label }: { v: GrowthVisit; mark: string; label: string }) {
+  const client = useQueryClient();
+  const done = useMutation({
+    mutationFn: () => send(`/admin/appointments/${v.id}/${mark}`, 'PATCH'),
+    onSettled: () => void client.invalidateQueries({ queryKey: ['growth'] }),
+  });
+  const phone = intl(v.guestPhone);
+  if (!phone) return <small>Неполный номер</small>;
+  return (
+    <a
+      className="table-remind"
+      href={`https://wa.me/${phone}?text=${encodeURIComponent(v.text)}`}
+      target="_blank"
+      rel="noopener noreferrer"
+      onClick={() => done.mutate()}
+    >
+      <WhatsAppIcon size={18} /> {label}
+    </a>
+  );
+}
+function GrowthList({
+  title,
+  caption,
+  empty,
+  items,
+  mark,
+  label,
+  config,
+}: {
+  title: string;
+  caption: string;
+  empty: string;
+  items: GrowthVisit[];
+  mark: string;
+  label: string;
+  config: Config;
+}) {
+  return (
+    <section className="growth-list">
+      <h3>
+        {title} <span className="count">{items.length}</span>
+      </h3>
+      <p className="caption">{caption}</p>
+      {!items.length ? (
+        <div className="empty">{empty}</div>
+      ) : (
+        <div className="table-wrap">
+          <table>
+            <tbody>
+              {items.map((v) => (
+                <tr key={v.id}>
+                  <td>
+                    {v.guestName || 'Клиент'}
+                    <small>{v.guestPhone}</small>
+                  </td>
+                  <td>
+                    {v.serviceName}
+                    <small>
+                      {dateLabel(v.startsAt, config.timezone)}
+                      {v.visits && v.visits > 1 ? ` · визитов за год: ${v.visits}` : ''}
+                    </small>
+                  </td>
+                  <td>
+                    <SendWhatsApp v={v} mark={mark} label={label} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
+/** Review requests after a visit and «пора подстричься» invitations. */
+function Growth({ config }: { config: Config }) {
+  const client = useQueryClient();
+  const [saved, setSaved] = useState(false);
+  const q = useQuery({ queryKey: ['growth'], queryFn: () => api<GrowthData>('/admin/growth') });
+  const save = useMutation({
+    mutationFn: (body: unknown) => send('/admin/growth', 'PUT', body),
+    onSuccess: () => {
+      setSaved(true);
+      void client.invalidateQueries({ queryKey: ['growth'] });
+    },
+  });
+  if (q.isPending) return <Loading />;
+  if (q.error) return <ErrorBox error={q.error} retry={() => void q.refetch()} />;
+  const { settings, reviews, returns } = q.data;
+  return (
+    <>
+      <div className="admin-toolbar">
+        <div>
+          <h2>Возврат клиентов</h2>
+          <p className="caption">
+            Нажмите кнопку — откроется WhatsApp клиента с готовым текстом, останется «Отправить».
+            Клиент сразу уходит из списка. Если во вкладке «WhatsApp» указаны шаблоны отзыва и
+            приглашения, сообщения уходят сами.
+          </p>
+        </div>
+      </div>
+      <GrowthList
+        title="Попросить отзыв"
+        caption="Визиты за последнюю неделю. Одного клиента просим не чаще раза в 3 месяца."
+        empty="Сейчас некого просить об отзыве."
+        items={reviews}
+        mark="review-requested"
+        label="Попросить отзыв"
+        config={config}
+      />
+      <GrowthList
+        title="Пора подстричься"
+        caption={`Клиенты, у которых последний визит был ${settings.returnWeeks} недель назад или раньше и новой записи нет.`}
+        empty="Сейчас некого приглашать — все записаны или были недавно."
+        items={returns}
+        mark="invited"
+        label="Пригласить"
+        config={config}
+      />
+      <form
+        className="panel wa-form"
+        key={JSON.stringify(settings)}
+        onSubmit={(e) => {
+          const f = fd(e);
+          setSaved(false);
+          save.mutate({
+            reviewUrl: String(f.get('reviewUrl')).trim(),
+            returnWeeks: Number(f.get('returnWeeks')),
+          });
+        }}
+      >
+        <h3>Настройки</h3>
+        <label>
+          Ссылка на отзывы (2GIS, Google)
+          <input
+            name="reviewUrl"
+            type="url"
+            required
+            pattern="https://.*"
+            defaultValue={settings.reviewUrl}
+          />
+        </label>
+        <label>
+          Приглашать снова через, недель
+          <input
+            name="returnWeeks"
+            type="number"
+            min="2"
+            max="26"
+            required
+            defaultValue={settings.returnWeeks}
+          />
+        </label>
+        {save.error && <ErrorBox error={save.error} />}
+        {saved && (
+          <p role="status" className="price-saved">
+            Сохранено.
+          </p>
+        )}
+        <button className="button" disabled={save.isPending}>
+          Сохранить
+        </button>
+      </form>
+    </>
+  );
+}
 interface WhatsAppSettings {
   enabled: boolean;
   phoneNumberId: string;
   templateName: string;
+  reviewTemplate: string;
+  returnTemplate: string;
   language: string;
   tokenHint: string;
 }
@@ -441,6 +633,8 @@ function WhatsAppApi({ config }: { config: Config }) {
         phoneNumberId: String(f.get('phoneNumberId')).trim(),
         accessToken: String(f.get('accessToken')).trim(),
         templateName: String(f.get('templateName')).trim(),
+        reviewTemplate: String(f.get('reviewTemplate')).trim(),
+        returnTemplate: String(f.get('returnTemplate')).trim(),
         language: String(f.get('language')).trim() || 'ru',
       },
       {
@@ -508,6 +702,28 @@ function WhatsAppApi({ config }: { config: Config }) {
           <label>
             Язык шаблона
             <input name="language" maxLength={6} placeholder="ru" defaultValue={s.language} />
+          </label>
+        </div>
+        <div className="form-grid">
+          <label>
+            Шаблон «Отзыв» (необязательно)
+            <input
+              name="reviewTemplate"
+              maxLength={512}
+              pattern="[a-z0-9_]*"
+              placeholder="review_request"
+              defaultValue={s.reviewTemplate}
+            />
+          </label>
+          <label>
+            Шаблон «Пора подстричься» (необязательно)
+            <input
+              name="returnTemplate"
+              maxLength={512}
+              pattern="[a-z0-9_]*"
+              placeholder="come_back"
+              defaultValue={s.returnTemplate}
+            />
           </label>
         </div>
         {save.error && <ErrorBox error={save.error} />}
@@ -582,6 +798,15 @@ function WhatsAppApi({ config }: { config: Config }) {
             </pre>
             {'{{1}}'} — имя клиента, {'{{2}}'} — «сегодня в 14:00», {'{{3}}'} — услуга. Дождитесь
             статуса «Активен» (обычно от минут до суток).
+          </li>
+          <li>
+            По желанию ещё два шаблона (категория «Маркетинг»), для вкладки «Возврат клиентов»:
+            <pre>
+              {`review_request: Здравствуйте, {{1}}! Спасибо, что были у нас в «${config.name}». Будем рады вашему отзыву: {{2}}
+
+come_back: Здравствуйте, {{1}}! Давно вас не видели в «${config.name}» — пора обновить стрижку? Записаться: {{2}}`}
+            </pre>
+            {'{{1}}'} — имя, {'{{2}}'} — ссылка (на отзывы или на запись).
           </li>
           <li>
             В разделе «Оплата» WhatsApp Manager добавьте карту — без неё Meta не отправляет

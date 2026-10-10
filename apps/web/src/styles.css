@@ -2764,3 +2764,21 @@ td button.confirm-button {
   color: #062b14;
   font-weight: 700;
 }
+/* Bringing clients back */
+.growth-list {
+  margin: 28px 0;
+}
+.growth-list h3 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.growth-list .count {
+  min-width: 28px;
+  padding: 2px 8px;
+  border-radius: var(--radius);
+  background: var(--accent);
+  color: #fff;
+  font-size: 14px;
+  text-align: center;
+}

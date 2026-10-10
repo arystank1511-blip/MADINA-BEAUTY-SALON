@@ -16,6 +16,8 @@ export const config = {
   // 2GIS card of the salon: address, map and route.
   map: process.env.SALON_MAP_URL || 'https://2gis.kz/kokshetau/firm/70000001054384638',
   whatsapp: (process.env.SALON_WHATSAPP || '77767296558').replace(/\D/g, ''),
+  // Public address used in messages to clients (links to booking).
+  siteUrl: `https://${process.env.PUBLIC_HOST || 'madina-salon.vercel.app'}`,
   demo: process.env.DEMO_MODE === 'true',
   production: process.env.NODE_ENV === 'production',
 };

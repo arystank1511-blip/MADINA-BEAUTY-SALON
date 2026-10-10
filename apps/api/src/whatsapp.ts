@@ -11,6 +11,10 @@ export interface WhatsAppSettings {
   /** Approved Utility template with three body variables: name, when, service. */
   templateName: string;
   language: string;
+  /** Optional template asking for a review: {{1}} name, {{2}} review link. */
+  reviewTemplate: string;
+  /** Optional template inviting a client back: {{1}} name, {{2}} booking link. */
+  returnTemplate: string;
 }
 const KEY = 'whatsapp';
 const empty: WhatsAppSettings = {
@@ -19,6 +23,8 @@ const empty: WhatsAppSettings = {
   accessToken: '',
   templateName: '',
   language: 'ru',
+  reviewTemplate: '',
+  returnTemplate: '',
 };
 
 /** Sends template messages to clients through the WhatsApp Business (Cloud) API. */
@@ -55,6 +61,7 @@ export class WhatsApp {
     s: WhatsAppSettings,
     to: string,
     params: string[],
+    template = s.templateName,
   ): Promise<{ ok: true } | { ok: false; error: string }> {
     const api = process.env.WHATSAPP_API_URL || 'https://graph.facebook.com/v21.0';
     try {
@@ -66,7 +73,7 @@ export class WhatsApp {
           to,
           type: 'template',
           template: {
-            name: s.templateName,
+            name: template,
             language: { code: s.language || 'ru' },
             components: [
               {
