@@ -22,6 +22,7 @@ import {
   useServices,
 } from '../api';
 import { Arrow, ButtonLink, ErrorBox, Loading, WhatsAppIcon, WhatsAppLink } from '../components';
+import { BirthdayInput } from '../clients';
 export function Book({ config, admin = false }: { config: Config; admin?: boolean }) {
   const [params, setParams] = useSearchParams(),
     services = useServices(),
@@ -32,6 +33,7 @@ export function Book({ config, admin = false }: { config: Config; admin?: boolea
     [customer, setCustomer] = useState(''),
     [guestName, setGuestName] = useState(''),
     [guestPhone, setGuestPhone] = useState(''),
+    [birthday, setBirthday] = useState(''),
     [sent, setSent] = useState(false);
   const [customerPage, setCustomerPage] = useState(1);
   const serviceId = params.get('service') || '',
@@ -150,6 +152,7 @@ export function Book({ config, admin = false }: { config: Config; admin?: boolea
         startsAt: time,
         name: guestName.trim(),
         phone: guestPhone.trim(),
+        ...(birthday ? { birthday } : {}),
       }),
     onSuccess: () => {
       setSent(true);
@@ -502,6 +505,11 @@ export function Book({ config, admin = false }: { config: Config; admin?: boolea
                         onChange={(e) => setGuestPhone(e.target.value)}
                       />
                     </label>
+                    <BirthdayInput
+                      label="День рождения — по желанию, пришлём скидку"
+                      value={birthday}
+                      onChange={setBirthday}
+                    />
                     <button
                       className="button whatsapp"
                       disabled={!time || !master || !service || request.isPending}

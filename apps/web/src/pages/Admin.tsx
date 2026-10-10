@@ -24,6 +24,7 @@ import {
 import { ButtonLink, ErrorBox, Loading, Modal, WhatsAppIcon } from '../components';
 import { intl, minutesUntil, Remind, Reminded } from '../remind';
 import { methodNames, Paid, PaymentDialog } from '../payment';
+import { birthdayLabel, ClientCardDialog, ClientSummary } from '../clients';
 export const statusNames = {
   PENDING: 'Ждёт подтверждения',
   CONFIRMED: 'Подтверждена',
@@ -55,6 +56,7 @@ export function Admin({ config }: { config: Config }) {
       <nav className="tabs" aria-label="Разделы управления">
         {[
           'Записи',
+          'Клиенты',
           'Статистика',
           'Напоминания',
           'Возврат клиентов',
@@ -76,6 +78,8 @@ export function Admin({ config }: { config: Config }) {
       </nav>
       {tab === 'Записи' ? (
         <Appointments config={config} />
+      ) : tab === 'Клиенты' ? (
+        <ClientsTab config={config} />
       ) : tab === 'Статистика' ? (
         <Statistics config={config} />
       ) : tab === 'Напоминания' ? (
@@ -597,6 +601,113 @@ function Statistics({ config }: { config: Config }) {
     </>
   );
 }
+/** Birthday greeting through WhatsApp; opening it marks the client greeted for this year. */
+function Greet({ b }: { b: { phone: string; displayPhone: string; text: string } }) {
+  const client = useQueryClient();
+  const done = useMutation({
+    mutationFn: () => send(`/admin/clients/${b.phone}/greeted`, 'PATCH'),
+    onSettled: () => void client.invalidateQueries({ queryKey: ['growth'] }),
+  });
+  const phone = intl(b.displayPhone);
+  if (!phone) return <small>Неполный номер</small>;
+  return (
+    <a
+      className="table-remind"
+      href={`https://wa.me/${phone}?text=${encodeURIComponent(b.text)}`}
+      target="_blank"
+      rel="noopener noreferrer"
+      onClick={() => done.mutate()}
+    >
+      <WhatsAppIcon size={18} /> Поздравить
+    </a>
+  );
+}
+/** Everyone who has booked, by phone: visits, spending, notes, birthday and the block list. */
+function ClientsTab({ config }: { config: Config }) {
+  const [search, setSearch] = useState('');
+  const [open, setOpen] = useState<string | null>(null);
+  const q = useQuery({
+    queryKey: ['clients', search],
+    queryFn: () => api<ClientSummary[]>(`/admin/clients?q=${encodeURIComponent(search)}`),
+  });
+  return (
+    <>
+      <div className="admin-toolbar">
+        <div>
+          <h2>Клиенты</h2>
+          <p className="caption">
+            Все, кто записывался, по номеру телефона. Нажмите на клиента — история визитов, заметка
+            (краска, пожелания), день рождения и «только через WhatsApp».
+          </p>
+        </div>
+      </div>
+      <label className="client-search">
+        Поиск
+        <input
+          type="search"
+          placeholder="Имя или номер"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+      </label>
+      {q.isPending ? (
+        <Loading />
+      ) : q.error ? (
+        <ErrorBox error={q.error} retry={() => void q.refetch()} />
+      ) : !q.data.length ? (
+        <div className="empty">{search ? 'Никого не нашли.' : 'Клиентов пока нет.'}</div>
+      ) : (
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Клиент</th>
+                <th>Визитов</th>
+                <th>Последний / следующий</th>
+                <th>Потратил(а)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {q.data.map((c) => (
+                <tr
+                  key={c.phone}
+                  className="clickable"
+                  tabIndex={0}
+                  onClick={() => setOpen(c.phone)}
+                  onKeyDown={(e) => e.key === 'Enter' && setOpen(c.phone)}
+                >
+                  <td>
+                    {c.name || 'Без имени'}
+                    <small>{c.displayPhone}</small>
+                    <span className="client-flags">
+                      {c.blocked && <span className="badge cancelled">только WhatsApp</span>}
+                      {c.noShows > 0 && (
+                        <span className="badge no_show">не пришёл: {c.noShows}</span>
+                      )}
+                      {c.birthday && (
+                        <span className="badge completed">🎂 {birthdayLabel(c.birthday)}</span>
+                      )}
+                    </span>
+                    {c.note && <small className="client-note">📝 {c.note}</small>}
+                  </td>
+                  <td>{c.visits}</td>
+                  <td>
+                    {c.lastVisit ? dateLabel(c.lastVisit, config.timezone) : '—'}
+                    {c.nextVisit && (
+                      <small>Записан(а): {dateLabel(c.nextVisit, config.timezone)}</small>
+                    )}
+                  </td>
+                  <td>{money(c.spentMinor, config.currency)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {open && <ClientCardDialog phone={open} config={config} onClose={() => setOpen(null)} />}
+    </>
+  );
+}
 interface GrowthVisit {
   id: string;
   guestName: string | null;
@@ -607,7 +718,8 @@ interface GrowthVisit {
   text: string;
 }
 interface GrowthData {
-  settings: { reviewUrl: string; returnWeeks: number };
+  settings: { reviewUrl: string; returnWeeks: number; birthdayDiscount: number };
+  birthdays: { phone: string; name: string; displayPhone: string; text: string }[];
   reviews: GrowthVisit[];
   returns: GrowthVisit[];
 }
@@ -700,7 +812,7 @@ function Growth({ config }: { config: Config }) {
   });
   if (q.isPending) return <Loading />;
   if (q.error) return <ErrorBox error={q.error} retry={() => void q.refetch()} />;
-  const { settings, reviews, returns } = q.data;
+  const { settings, reviews, returns, birthdays } = q.data;
   return (
     <>
       <div className="admin-toolbar">
@@ -713,6 +825,31 @@ function Growth({ config }: { config: Config }) {
           </p>
         </div>
       </div>
+      {birthdays.length > 0 && (
+        <section className="growth-list">
+          <h3>
+            🎂 День рождения сегодня <span className="count">{birthdays.length}</span>
+          </h3>
+          <p className="caption">Поздравление со скидкой {settings.birthdayDiscount}% на неделю.</p>
+          <div className="table-wrap">
+            <table>
+              <tbody>
+                {birthdays.map((b) => (
+                  <tr key={b.phone}>
+                    <td>
+                      {b.name || 'Клиент'}
+                      <small>{b.displayPhone}</small>
+                    </td>
+                    <td>
+                      <Greet b={b} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
       <GrowthList
         title="Попросить отзыв"
         caption="Визиты за последнюю неделю. Одного клиента просим не чаще раза в 3 месяца."
@@ -740,6 +877,7 @@ function Growth({ config }: { config: Config }) {
           save.mutate({
             reviewUrl: String(f.get('reviewUrl')).trim(),
             returnWeeks: Number(f.get('returnWeeks')),
+            birthdayDiscount: Number(f.get('birthdayDiscount')),
           });
         }}
       >
@@ -765,6 +903,17 @@ function Growth({ config }: { config: Config }) {
             defaultValue={settings.returnWeeks}
           />
         </label>
+        <label>
+          Скидка в день рождения, %
+          <input
+            name="birthdayDiscount"
+            type="number"
+            min="0"
+            max="100"
+            required
+            defaultValue={settings.birthdayDiscount}
+          />
+        </label>
         {save.error && <ErrorBox error={save.error} />}
         {saved && (
           <p role="status" className="price-saved">
@@ -784,6 +933,7 @@ interface WhatsAppSettings {
   templateName: string;
   reviewTemplate: string;
   returnTemplate: string;
+  birthdayTemplate: string;
   language: string;
   tokenHint: string;
 }
@@ -818,6 +968,7 @@ function WhatsAppApi({ config }: { config: Config }) {
         templateName: String(f.get('templateName')).trim(),
         reviewTemplate: String(f.get('reviewTemplate')).trim(),
         returnTemplate: String(f.get('returnTemplate')).trim(),
+        birthdayTemplate: String(f.get('birthdayTemplate')).trim(),
         language: String(f.get('language')).trim() || 'ru',
       },
       {
@@ -908,6 +1059,16 @@ function WhatsAppApi({ config }: { config: Config }) {
               defaultValue={s.returnTemplate}
             />
           </label>
+          <label>
+            Шаблон «С днём рождения» (необязательно)
+            <input
+              name="birthdayTemplate"
+              maxLength={512}
+              pattern="[a-z0-9_]*"
+              placeholder="birthday"
+              defaultValue={s.birthdayTemplate}
+            />
+          </label>
         </div>
         {save.error && <ErrorBox error={save.error} />}
         {saved && (
@@ -987,9 +1148,11 @@ function WhatsAppApi({ config }: { config: Config }) {
             <pre>
               {`review_request: Здравствуйте, {{1}}! Спасибо, что были у нас в «${config.name}». Будем рады вашему отзыву: {{2}}
 
-come_back: Здравствуйте, {{1}}! Давно вас не видели в «${config.name}» — пора обновить стрижку? Записаться: {{2}}`}
+come_back: Здравствуйте, {{1}}! Давно вас не видели в «${config.name}» — пора обновить стрижку? Записаться: {{2}}
+
+birthday: Здравствуйте, {{1}}! С днём рождения! «${config.name}» дарит скидку {{2}}% на любую услугу в течение недели.`}
             </pre>
-            {'{{1}}'} — имя, {'{{2}}'} — ссылка (на отзывы или на запись).
+            {'{{1}}'} — имя, {'{{2}}'} — ссылка (на отзывы или на запись) или размер скидки.
           </li>
           <li>
             В разделе «Оплата» WhatsApp Manager добавьте карту — без неё Meta не отправляет

@@ -18,6 +18,7 @@ import {
 import { ErrorBox, Loading, Modal, WhatsAppIcon } from '../components';
 import { intl, minutesUntil, Remind, Reminded } from '../remind';
 import { Paid, PaymentDialog } from '../payment';
+import { ClientInfo, isBirthdayToday, NoteDialog } from '../clients';
 
 interface Span {
   start: string;
@@ -37,6 +38,8 @@ interface Day {
   timeOffs: { id: string; startsAt: string; endsAt: string; reason: string }[];
   /** Missed visits per phone key (last 10 digits). */
   noShows: Record<string, number>;
+  /** Salon notes per phone key. */
+  clients: Record<string, ClientInfo>;
   appointments: Appointment[];
 }
 type Row =
@@ -91,6 +94,7 @@ export function MasterDay({ config }: { config: Config }) {
   const [cancelling, setCancelling] = useState<Appointment | null>(null);
   const [missing, setMissing] = useState<Appointment | null>(null);
   const [paying, setPaying] = useState<Appointment | null>(null);
+  const [noting, setNoting] = useState<Appointment | null>(null);
   const client = useQueryClient();
   const day = useQuery({
     queryKey: ['day', date],
@@ -241,6 +245,8 @@ export function MasterDay({ config }: { config: Config }) {
                       a={r.visit}
                       config={config}
                       missed={day.data.noShows[phoneKey(r.visit.guestPhone)] || 0}
+                      card={day.data.clients[phoneKey(r.visit.guestPhone)]}
+                      onNote={() => setNoting(r.visit)}
                     />
                     {r.visit.status === 'PENDING' ? (
                       <div className="md-actions">
@@ -319,6 +325,14 @@ export function MasterDay({ config }: { config: Config }) {
           }}
         />
       )}
+      {noting && (
+        <NoteDialog
+          phone={phoneKey(noting.guestPhone)}
+          name={clientName(noting)}
+          info={day.data?.clients[phoneKey(noting.guestPhone)]}
+          onClose={() => setNoting(null)}
+        />
+      )}
       {paying && <PaymentDialog a={paying} config={config} onClose={() => setPaying(null)} />}
       {missing && (
         <Modal title="Клиент не пришёл?" onClose={() => !decide.isPending && setMissing(null)}>
@@ -378,11 +392,15 @@ function Visit({
   config,
   withDate,
   missed = 0,
+  card,
+  onNote,
 }: {
   a: Appointment;
   config: Config;
   withDate?: boolean;
   missed?: number;
+  card?: ClientInfo;
+  onNote?: () => void;
 }) {
   const phone = intl(a.guestPhone || '');
   const soon = a.status === 'CONFIRMED' || a.status === 'PENDING' ? minutesUntil(a.startsAt) : null;
@@ -396,8 +414,14 @@ function Visit({
         {a.status === 'NO_SHOW' && <span className="md-badge gray">не пришёл</span>}
         {soon !== null && soon <= 60 && <span className="md-badge soon">через {soon} мин</span>}
       </div>
-      <h3>{clientName(a)}</h3>
+      <h3>
+        {clientName(a)}
+        {isBirthdayToday(card?.birthday, config.timezone) && (
+          <span className="md-birthday"> 🎂 день рождения!</span>
+        )}
+      </h3>
       <p>{a.serviceName}</p>
+      {card?.note && <p className="md-note">📝 {card.note}</p>}
       <Reminded a={a} config={config} />
       <Paid a={a} config={config} />
       {missed > 0 && a.status !== 'NO_SHOW' && (
@@ -414,6 +438,11 @@ function Visit({
           <a href={`https://wa.me/${phone}`} target="_blank" rel="noopener noreferrer">
             <WhatsAppIcon size={18} /> WhatsApp
           </a>
+          {onNote && (
+            <button type="button" onClick={onNote}>
+              📝 Заметка
+            </button>
+          )}
         </div>
       )}
     </>

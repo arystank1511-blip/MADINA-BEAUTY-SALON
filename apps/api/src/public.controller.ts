@@ -8,6 +8,7 @@ import { fail } from './errors';
 import { Telegram } from './telegram';
 import { BookingService } from './booking/booking.service';
 import { intlPhone } from './reminders';
+import { Clients } from './clients';
 @ApiTags('Публичные')
 @Controller()
 export class PublicController {
@@ -15,6 +16,7 @@ export class PublicController {
     private db: Db,
     private booking: BookingService,
     private telegram: Telegram,
+    private clients: Clients,
   ) {}
   private requests = new Map<string, { count: number; until: number }>();
   @Get('config') @ApiOperation({ summary: 'Настройки салона' }) settings() {
@@ -62,6 +64,18 @@ export class PublicController {
     // The phone is how the salon confirms and reminds; it must be a full number.
     if (!intlPhone(body.phone))
       fail(400, 'INVALID_PHONE', 'Укажите телефон полностью, например +7 777 123 45 67.');
+    if (await this.clients.isBlocked(body.phone)) {
+      await this.telegram.notify([
+        `Попытка записи · ${config.name}`,
+        `${body.name}, ${body.phone} — в списке «только через WhatsApp». Время не занято.`,
+      ]);
+      fail(
+        403,
+        'BOOKING_BY_WHATSAPP',
+        'Для записи, пожалуйста, напишите нам в WhatsApp — подберём удобное время.',
+      );
+    }
+    if (body.birthday) await this.clients.rememberBirthday(body.phone, body.birthday);
     const a = await this.booking.book(
       body,
       { guestName: body.name, guestPhone: body.phone },
