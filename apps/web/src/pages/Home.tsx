@@ -4,6 +4,7 @@ import {
   ArrowUpRight,
   CalendarClock,
   Clock,
+  Gift,
   MapPin,
   Phone,
   Wallet,
@@ -23,7 +24,7 @@ import {
   WhatsAppIcon,
   WhatsAppLink,
 } from '../components';
-import { Gallery, PromoBanner, useGallery } from '../site';
+import { Gallery, PromoBanner, useGallery, useLoyalty } from '../site';
 import { useT } from '../i18n';
 export function Home({ config }: { config: Config }) {
   const services = useServices(),
@@ -394,6 +395,7 @@ function Highlights({ config, services }: { config: Config; services?: Service[]
     ],
     [Wallet, t('Удобная оплата'), t('Наличными или Kaspi QR в салоне.')],
   ] as const;
+  const loyalty = useLoyalty().data;
   return (
     <ul className="highlights">
       {items.map(([Icon, title, text]) => (
@@ -405,6 +407,17 @@ function Highlights({ config, services }: { config: Config; services?: Service[]
           {text && <p>{text}</p>}
         </li>
       ))}
+      {loyalty && (
+        <li className="wide">
+          <span className="contact-icon">
+            <Gift size={20} aria-hidden="true" />
+          </span>
+          <h3>
+            {t('Каждый {n}-й визит — {reward}', { n: loyalty.every, reward: loyalty.reward })}
+          </h3>
+          <p>{t('Визиты считаем по номеру телефона, ничего копить и показывать не нужно.')}</p>
+        </li>
+      )}
     </ul>
   );
 }

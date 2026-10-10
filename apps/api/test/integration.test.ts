@@ -1442,6 +1442,136 @@ describe.sequential('real PostgreSQL, HTTP and independent Nest instances', () =
       await db.pushSubscription.deleteMany({ where: { endpoint } });
     }
   });
+  it('loyalty: every N-th visit is marked for the master and the client; weekly report on Monday', async () => {
+    process.env.PUSH_DRY_RUN = '1';
+    const endpoint = `https://push.example.com/${randomUUID()}`;
+    const tail = String(Math.floor(Math.random() * 1e7)).padStart(7, '0');
+    try {
+      expect(((await call('/loyalty')).body as unknown as { loyalty: unknown }).loyalty).toBeNull();
+      const settings = { enabled: true, every: 3, reward: 'стрижка в подарок' };
+      expect((await call('/admin/loyalty', 'PUT', settings, c1)).status).toBe(403);
+      expect((await call('/admin/loyalty', 'PUT', { ...settings, every: 1 }, admin)).status).toBe(
+        400,
+      );
+      expect((await call('/admin/loyalty', 'PUT', { ...settings, reward: '' }, admin)).status).toBe(
+        400,
+      );
+      expect((await call('/admin/loyalty', 'PUT', settings, admin)).status).toBe(200);
+      expect(((await call('/loyalty')).body as unknown as { loyalty: unknown }).loyalty).toEqual({
+        every: 3,
+        reward: 'стрижка в подарок',
+      });
+
+      // Two earlier visits by the same phone written differently; a no-show does not count.
+      const past = (days: number, status: 'COMPLETED' | 'NO_SHOW', phone: string) => {
+        const at = new Date(Date.now() - days * 86400000);
+        return db.appointment.create({
+          data: {
+            guestName: 'Постоянная',
+            guestPhone: phone,
+            masterId: master2,
+            serviceId: service,
+            startsAt: at,
+            endsAt: new Date(+at + 30 * 60000),
+            occupiedUntil: new Date(+at + 30 * 60000),
+            serviceName: 'Тест',
+            priceMinor: 300000,
+            paidMinor: 300000,
+            paymentMethod: 'CASH',
+            durationMinutes: 30,
+            bufferAfterMinutes: 0,
+            status,
+          },
+        });
+      };
+      await past(30, 'COMPLETED', `+7 705 ${tail}`);
+      await past(20, 'COMPLETED', `8705${tail}`);
+      await past(10, 'NO_SHOW', `8 705 ${tail}`);
+      const day = Temporal.PlainDate.from(salonDate(new Date(), 'Asia/Almaty'))
+        .add({ days: 20 + Math.floor(Math.random() * 35) })
+        .toString();
+      const res = await fetch(urls[0] + '/api/v1/booking-requests', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          origin,
+          'x-csrf-protection': '1',
+          'x-forwarded-for': `198.18.0.${Math.floor(Math.random() * 250) + 1}`,
+        },
+        body: JSON.stringify({
+          serviceId: service,
+          masterId: master,
+          startsAt: localInstant(day, '10:00', 'Asia/Almaty').toISOString(),
+          name: 'Постоянная',
+          phone: `+7 (705) ${tail}`,
+        }),
+      });
+      expect(res.status).toBe(201);
+      const third = (await res.json()) as { id: string; manageUrl: string };
+      const view = (
+        await call(`/admin/day?date=${day}&masterId=${master}`, 'GET', undefined, admin)
+      ).body as unknown as { loyalty: unknown; visitNumbers: Record<string, number> };
+      expect(view.loyalty).toEqual({ every: 3, reward: 'стрижка в подарок' });
+      expect(view.visitNumbers[third.id]).toBe(3);
+      const ref = third.manageUrl.split('/v/')[1];
+      expect(
+        ((await call(`/visit/${ref}`)).body as unknown as { loyalty: unknown }).loyalty,
+      ).toEqual({ number: 3, every: 3, reward: 'стрижка в подарок' });
+      await db.appointment.update({
+        where: { id: third.id },
+        data: { status: 'CANCELLED', cancelledAt: new Date(), holdUntil: null },
+      });
+
+      // Weekly report: preview and send for the owner only; automatic once on Monday from 09:00.
+      expect((await call('/admin/weekly-report', 'GET', undefined, c1)).status).toBe(403);
+      const preview = (await call('/admin/weekly-report', 'GET', undefined, admin))
+        .body as unknown as { lines: string[] };
+      expect(preview.lines[0]).toMatch(/^Итоги недели .+ · /);
+      expect(preview.lines.some((l) => l.startsWith('Выручка: '))).toBe(true);
+      expect(preview.lines.at(-1)).toMatch(/^На эту неделю уже записано: \d+$/);
+      expect(
+        (
+          await call(
+            '/push/subscribe',
+            'POST',
+            { endpoint, keys: { p256dh: 'BOr'.padEnd(87, 'z'), auth: 'auth-secret-3' } },
+            admin,
+          )
+        ).status,
+      ).toBe(201);
+      const { WeeklyReport } = loadCompiled('../dist/src/report.js') as {
+        WeeklyReport: new (...args: never[]) => {
+          scheduled(now: Date, clock: string): Promise<boolean>;
+        };
+      };
+      const { Push } = loadCompiled('../dist/src/push.js') as {
+        Push: new (...args: never[]) => {
+          sent: { endpoint: string; message: { title: string } }[];
+        };
+      };
+      const report = apps[0].get(WeeklyReport);
+      const today = Temporal.PlainDate.from(salonDate(new Date(), 'Asia/Almaty'));
+      const monday = today.add({ days: 8 - today.dayOfWeek });
+      const at = (d: Temporal.PlainDate, time: string) =>
+        new Date(localInstant(d.toString(), time, 'Asia/Almaty').toISOString());
+      await db.setting.deleteMany({ where: { key: `weekly:${monday.toString()}` } });
+      expect(await report.scheduled(at(monday, '08:30'), '08:30')).toBe(false);
+      expect(await report.scheduled(at(monday.add({ days: 1 }), '09:30'), '09:30')).toBe(false);
+      expect(await report.scheduled(at(monday, '09:30'), '09:30')).toBe(true);
+      expect(await report.scheduled(at(monday, '10:30'), '10:30')).toBe(false);
+      expect(
+        apps[0]
+          .get(Push)
+          .sent.filter((s) => s.endpoint === endpoint)
+          .map((s) => s.message.title),
+      ).toEqual([expect.stringMatching(/^Неделя: .+, визитов \d+$/)]);
+    } finally {
+      delete process.env.PUSH_DRY_RUN;
+      await db.pushSubscription.deleteMany({ where: { endpoint } });
+      await db.setting.deleteMany({ where: { key: { in: ['loyalty'] } } });
+      await db.setting.deleteMany({ where: { key: { startsWith: 'weekly:' } } });
+    }
+  });
   it('rate limits abusive client without blocking another behind the trusted proxy', async () => {
     const attempt = async (ip: string) =>
       fetch(urls[0] + '/api/v1/auth/login', {

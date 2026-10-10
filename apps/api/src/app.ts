@@ -22,6 +22,8 @@ import { Clients } from './clients';
 import { Site } from './site';
 import { Push, PushController } from './push';
 import { VisitController, VisitLinks, Waitlist } from './visit';
+import { Loyalty } from './loyalty';
+import { WeeklyReport } from './report';
 import { config, isAllowedOrigin } from './config';
 @Module({
   controllers: [
@@ -47,6 +49,8 @@ import { config, isAllowedOrigin } from './config';
     Push,
     VisitLinks,
     Waitlist,
+    Loyalty,
+    WeeklyReport,
   ],
 })
 export class AppModule {}

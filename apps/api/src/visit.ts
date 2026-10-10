@@ -13,6 +13,7 @@ import { appointmentInclude, BookingService } from './booking/booking.service';
 import { salonDate } from './availability/rules';
 import { RescheduleDto, WaitlistDto } from './dto';
 import { intlPhone } from './reminders';
+import { Loyalty } from './loyalty';
 
 /** Clients may move or cancel up to this long before the visit; later, they write in WhatsApp. */
 export const CHANGE_BEFORE_MINUTES = 120;
@@ -140,6 +141,7 @@ export class VisitController {
     private telegram: Telegram,
     private push: Push,
     private waitlist: Waitlist,
+    private loyalty: Loyalty,
   ) {}
   private async visit(ref: string) {
     const id = await this.links.open(ref);
@@ -159,6 +161,8 @@ export class VisitController {
   async show(@Param('ref') ref: string) {
     const a = await this.visit(ref);
     const now = new Date();
+    const programme = await this.loyalty.active();
+    const number = programme ? (await this.loyalty.numbers([a]))[a.id] : undefined;
     return {
       id: a.id,
       name: a.guestName ?? a.customer?.name ?? '',
@@ -172,6 +176,7 @@ export class VisitController {
       status: a.status === 'PENDING' && (!a.holdUntil || a.holdUntil <= now) ? 'EXPIRED' : a.status,
       canChange: this.changeable(a),
       changeBeforeMinutes: CHANGE_BEFORE_MINUTES,
+      loyalty: programme && number ? { ...programme, number } : null,
     };
   }
   private refuse(a: Parameters<VisitController['changeable']>[0]) {

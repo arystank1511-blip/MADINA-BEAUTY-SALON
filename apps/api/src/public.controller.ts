@@ -10,6 +10,7 @@ import { BookingService } from './booking/booking.service';
 import { intlPhone } from './reminders';
 import { Clients } from './clients';
 import { Site } from './site';
+import { Loyalty } from './loyalty';
 import { Push } from './push';
 import { VisitLinks } from './visit';
 @ApiTags('Публичные')
@@ -23,6 +24,7 @@ export class PublicController {
     private site: Site,
     private push: Push,
     private links: VisitLinks,
+    private loyalty: Loyalty,
   ) {}
   private requests = new Map<string, { count: number; until: number }>();
   @Get('config') @ApiOperation({ summary: 'Настройки салона' }) settings() {
@@ -124,6 +126,11 @@ export class PublicController {
       telegram,
       manageUrl: await this.links.url(a.id),
     };
+  }
+  @Get('loyalty')
+  @ApiOperation({ summary: 'Бонусная программа: { loyalty: { every, reward } | null }' })
+  async loyaltyProgramme() {
+    return { loyalty: await this.loyalty.active() };
   }
   @Get('promo') @ApiOperation({ summary: 'Баннер акции: { promo: {...} | null }' }) async promo() {
     // Wrapped: a bare null would be an empty response body.

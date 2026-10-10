@@ -474,6 +474,7 @@ function Statistics({ config }: { config: Config }) {
     );
   return (
     <>
+      <WeeklyReport />
       <div className="filters stats-range">
         <div className="segmented" role="group" aria-label="Период">
           {presets.map((p) => (
@@ -1058,7 +1059,120 @@ function Growth({ config }: { config: Config }) {
           Сохранить
         </button>
       </form>
+      <LoyaltyForm />
     </>
+  );
+}
+/** Monday's Telegram report: preview it and send it now. */
+function WeeklyReport() {
+  const [open, setOpen] = useState(false);
+  const q = useQuery({
+    queryKey: ['weekly-report'],
+    queryFn: () => api<{ lines: string[] }>('/admin/weekly-report'),
+    enabled: open,
+  });
+  const sendNow = useMutation({
+    mutationFn: () => send<{ delivered: boolean }>('/admin/weekly-report', 'POST'),
+  });
+  return (
+    <details className="panel weekly-report" onToggle={(e) => setOpen(e.currentTarget.open)}>
+      <summary>📊 Итоги недели — приходят в Telegram каждый понедельник в 09:00</summary>
+      {q.isPending && open ? (
+        <Loading />
+      ) : q.error ? (
+        <ErrorBox error={q.error} retry={() => void q.refetch()} />
+      ) : (
+        q.data && <pre className="report-preview">{q.data.lines.join('\n')}</pre>
+      )}
+      {sendNow.error && <ErrorBox error={sendNow.error} />}
+      {sendNow.data && (
+        <p role="status" className="price-saved">
+          {sendNow.data.delivered
+            ? 'Отправлено.'
+            : 'Не отправлено: подключите Telegram или уведомления на телефоне.'}
+        </p>
+      )}
+      <button
+        className="button secondary"
+        disabled={sendNow.isPending}
+        onClick={() => sendNow.mutate()}
+      >
+        {sendNow.isPending ? 'Отправляем…' : 'Отправить сейчас'}
+      </button>
+    </details>
+  );
+}
+interface LoyaltySettings {
+  enabled: boolean;
+  every: number;
+  reward: string;
+}
+/** «Каждый N-й визит — подарок»: shown on the site, in «Мой день» and on the client's link. */
+function LoyaltyForm() {
+  const client = useQueryClient();
+  const [saved, setSaved] = useState(false);
+  const q = useQuery({
+    queryKey: ['loyalty-settings'],
+    queryFn: () => api<LoyaltySettings>('/admin/loyalty'),
+  });
+  const save = useMutation({
+    mutationFn: (body: LoyaltySettings) => send('/admin/loyalty', 'PUT', body),
+    onSuccess: () => {
+      setSaved(true);
+      for (const key of ['loyalty-settings', 'loyalty', 'day'])
+        void client.invalidateQueries({ queryKey: [key] });
+    },
+  });
+  if (q.isPending) return <Loading />;
+  if (q.error) return <ErrorBox error={q.error} retry={() => void q.refetch()} />;
+  const s = q.data;
+  return (
+    <form
+      className="panel wa-form"
+      key={JSON.stringify(s)}
+      onSubmit={(e) => {
+        const f = fd(e);
+        setSaved(false);
+        save.mutate({
+          enabled: f.get('enabled') === 'on',
+          every: Number(f.get('every')),
+          reward: String(f.get('reward')).trim(),
+        });
+      }}
+    >
+      <h3>🎁 Бонусы постоянным клиентам</h3>
+      <p className="caption">
+        Визиты считаются по номеру телефона. На сайте появится «Каждый {s.every}-й визит —{' '}
+        {s.reward}», а в «Мой день» у такого визита будет значок 🎁.
+      </p>
+      <label className="checkbox">
+        <input name="enabled" type="checkbox" defaultChecked={s.enabled} /> Включить
+      </label>
+      <label>
+        Подарок на каждый N-й визит
+        <input name="every" type="number" min="2" max="20" required defaultValue={s.every} />
+      </label>
+      <label>
+        Что получает клиент
+        <input
+          name="reward"
+          required
+          minLength={2}
+          maxLength={60}
+          placeholder="скидка 50%"
+          defaultValue={s.reward}
+        />
+      </label>
+      {save.error && <ErrorBox error={save.error} />}
+      {saved && (
+        <p role="status" className="price-saved">
+          Сохранено.
+        </p>
+      )}
+      <button className="button" disabled={save.isPending}>
+        Сохранить
+      </button>
+    </form>
   );
 }
 interface WhatsAppSettings {

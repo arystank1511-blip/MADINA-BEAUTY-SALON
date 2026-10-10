@@ -46,6 +46,10 @@ interface Day {
   appointments: Appointment[];
   /** Clients who asked to be told if this day frees up. */
   waitlist: { id: string; name: string; phone: string; createdAt: string }[];
+  /** «Каждый N-й визит — подарок», when switched on. */
+  loyalty: { every: number; reward: string } | null;
+  /** Visit id → which visit in a row it is for this client. */
+  visitNumbers: Record<string, number>;
 }
 type Row =
   | { kind: 'free'; at: string }
@@ -258,6 +262,7 @@ export function MasterDay({ config }: { config: Config }) {
                       card={day.data.clients[phoneKey(r.visit.guestPhone)]}
                       onNote={() => setNoting(r.visit)}
                     />
+                    <Gift day={day.data} id={r.visit.id} />
                     {r.visit.status === 'PENDING' ? (
                       <div className="md-actions">
                         <button
@@ -586,4 +591,17 @@ function Waiting({ day, config, onDone }: { day: Day; config: Config; onDone: ()
       ))}
     </div>
   );
+}
+
+/** 🎁 on the visit that earns the loyalty reward; the visit count otherwise. */
+function Gift({ day, id }: { day: Day; id: string }) {
+  const n = day.visitNumbers?.[id];
+  if (!day.loyalty || !n) return null;
+  if (n % day.loyalty.every === 0)
+    return (
+      <span className="gift-badge">
+        🎁 {n}-й визит — {day.loyalty.reward}
+      </span>
+    );
+  return null;
 }

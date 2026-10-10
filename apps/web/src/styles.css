@@ -3438,3 +3438,32 @@ tr.clickable:hover td {
 .md-wait a[href^='tel'] {
   color: var(--muted);
 }
+.weekly-report {
+  margin-bottom: 20px;
+}
+.weekly-report summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+.report-preview {
+  white-space: pre-wrap;
+  font: inherit;
+  line-height: 1.6;
+  color: var(--muted);
+  margin: 16px 0;
+}
+.gift-badge {
+  display: inline-block;
+  margin-top: 6px;
+  padding: 2px 8px;
+  border: 1px solid var(--accent);
+  color: var(--text);
+  font-size: 14px;
+}
+.highlights li.wide {
+  grid-column: 1 / -1;
+}
+.loyalty-note {
+  color: var(--muted);
+  margin: -12px 0 28px;
+}

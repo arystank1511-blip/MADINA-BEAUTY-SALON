@@ -20,6 +20,15 @@ export function usePromo() {
     staleTime: 5 * 60000,
   });
 }
+/** «Каждый N-й визит — подарок», or null when the salon has it off. */
+export function useLoyalty() {
+  return useQuery({
+    queryKey: ['loyalty'],
+    queryFn: () =>
+      api<{ loyalty: { every: number; reward: string } | null }>('/loyalty').then((r) => r.loyalty),
+    staleTime: 5 * 60000,
+  });
+}
 export function useGallery() {
   return useQuery({ queryKey: ['gallery'], queryFn: () => api<Photo[]>('/gallery') });
 }
