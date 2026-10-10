@@ -15,6 +15,8 @@ export interface WhatsAppSettings {
   reviewTemplate: string;
   /** Optional template inviting a client back: {{1}} name, {{2}} booking link. */
   returnTemplate: string;
+  /** Optional birthday greeting: {{1}} name, {{2}} discount percent. */
+  birthdayTemplate: string;
 }
 const KEY = 'whatsapp';
 const empty: WhatsAppSettings = {
@@ -25,6 +27,7 @@ const empty: WhatsAppSettings = {
   language: 'ru',
   reviewTemplate: '',
   returnTemplate: '',
+  birthdayTemplate: '',
 };
 
 /** Sends template messages to clients through the WhatsApp Business (Cloud) API. */

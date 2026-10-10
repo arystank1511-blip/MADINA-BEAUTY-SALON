@@ -17,6 +17,8 @@ import { Admin, AuthRequest, safeUser, SessionGuard } from '../auth/auth';
 import { Db } from '../db';
 import {
   AdminBookingDto,
+  ClientDto,
+  ClientsQuery,
   GrowthSettingsDto,
   PaymentDto,
   StatsQuery,
@@ -44,6 +46,7 @@ import { intlPhone, reminderParams, Reminders } from '../reminders';
 import { WhatsApp } from '../whatsapp';
 import { Growth } from '../growth';
 import { Stats } from '../stats';
+import { Clients } from '../clients';
 /** Comparable phone key: the last 10 digits, so +7 777…, 8 777… and 777… match. */
 export const phoneKey = (phone: string | null | undefined) => {
   const digits = (phone || '').replace(/\D/g, '');
@@ -62,6 +65,7 @@ export class AdminController {
     private whatsapp: WhatsApp,
     private growth: Growth,
     private stats: Stats,
+    private clients: Clients,
   ) {}
   private async schedule<T>(id: string, mutate: (tx: Tx) => Promise<T>) {
     return this.db.$transaction(
@@ -355,6 +359,7 @@ export class AdminController {
       date,
       now: now.toISOString(),
       noShows,
+      clients: await this.clients.forPhones(appointments.map((a) => a.guestPhone)),
       masters,
       master: { id: master.id, name: master.name },
       services,
@@ -404,6 +409,31 @@ export class AdminController {
       orderBy: { startsAt: 'asc' },
     });
   }
+  @Get('clients')
+  @ApiOperation({ summary: 'Клиенты по номеру телефона: визиты, неявки, заметки' })
+  clientList(@Query() q: ClientsQuery) {
+    return this.clients.list(q.q);
+  }
+  @Get('clients/:phone')
+  @ApiOperation({ summary: 'Карточка клиента: история визитов и заметки' })
+  clientCard(@Param('phone') phone: string) {
+    return this.clients.card(this.clientKey(phone));
+  }
+  @Put('clients/:phone')
+  @ApiOperation({ summary: 'Заметка, день рождения и «только через WhatsApp»' })
+  clientSave(@Param('phone') phone: string, @Body() b: ClientDto) {
+    return this.clients.save(this.clientKey(phone), b);
+  }
+  @Patch('clients/:phone/greeted')
+  @ApiOperation({ summary: 'Отметить, что клиента поздравили с днём рождения' })
+  async clientGreeted(@Param('phone') phone: string) {
+    await this.clients.greeted(this.clientKey(phone));
+    return { phone };
+  }
+  private clientKey(phone: string) {
+    if (!/^\d{10}$/.test(phone)) fail(400, 'INVALID_PHONE', 'Номер — 10 последних цифр.');
+    return phone;
+  }
   @Get('stats')
   @ApiOperation({ summary: 'Статистика за период: визиты, выручка, услуги, клиенты' })
   statistics(@Query() q: StatsQuery) {
@@ -433,8 +463,13 @@ export class AdminController {
       this.growth.reviewsDue(now),
       this.growth.returnsDue(now, settings.returnWeeks),
     ]);
+    const birthdays = await this.clients.birthdaysToday(now);
     return {
       settings,
+      birthdays: birthdays.map((b) => ({
+        ...b,
+        text: this.growth.birthdayText(b.name, settings.birthdayDiscount),
+      })),
       reviews: reviews.map((a) => ({
         ...a,
         text: this.growth.reviewText(a.guestName, settings.reviewUrl),

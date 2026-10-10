@@ -4,12 +4,15 @@ import { Db } from './db';
 import { config } from './config';
 import { activeAt } from './booking/booking.service';
 import { WhatsApp } from './whatsapp';
+import { Clients } from './clients';
 
 export interface GrowthSettings {
   /** Where clients leave a review: the salon's 2GIS card by default. */
   reviewUrl: string;
   /** Weeks after the latest visit when a client is invited back. */
   returnWeeks: number;
+  /** Birthday discount, percent. */
+  birthdayDiscount: number;
 }
 const KEY = 'growth';
 const DAY = 86400000;
@@ -40,12 +43,14 @@ export class Growth {
   constructor(
     private db: Db,
     private whatsapp: WhatsApp,
+    private clients: Clients,
   ) {}
   async settings(): Promise<GrowthSettings> {
     const row = await this.db.setting.findUnique({ where: { key: KEY } });
     return {
       reviewUrl: config.map,
       returnWeeks: 5,
+      birthdayDiscount: 10,
       ...((row?.value as Partial<GrowthSettings> | null) ?? {}),
     };
   }
@@ -71,6 +76,15 @@ export class Growth {
       `Давно вас не видели в «${config.name}» — пора обновить стрижку?`,
       `Записаться на удобное время: ${config.siteUrl}/book`,
       'Ждём вас!',
+    ].join('\n');
+  }
+  birthdayText(name: string | null, discount: number) {
+    return [
+      `Здравствуйте${name ? ', ' + name : ''}! С днём рождения!`,
+      `«${config.name}» желает вам радости и красоты.`,
+      discount
+        ? `Дарим скидку ${discount}% на любую услугу в течение недели. Записаться: ${config.siteUrl}/book`
+        : `Будем рады видеть вас: ${config.siteUrl}/book`,
     ].join('\n');
   }
   /** Visits that ended 2 h – 7 days ago whose client was not asked for a review recently. */
@@ -139,7 +153,8 @@ export class Growth {
   /** WhatsApp Business API: sends the optional review and return templates, once each. */
   async autoSend(now = new Date()) {
     const wa = await this.whatsapp.active();
-    if (!wa || (!wa.reviewTemplate && !wa.returnTemplate)) return { reviews: 0, returns: 0 };
+    if (!wa || (!wa.reviewTemplate && !wa.returnTemplate && !wa.birthdayTemplate))
+      return { reviews: 0, returns: 0, birthdays: 0 };
     const settings = await this.settings();
     let reviews = 0,
       returns = 0;
@@ -179,6 +194,20 @@ export class Growth {
           ])
         )
           returns++;
-    return { reviews, returns };
+    let birthdays = 0;
+    if (wa.birthdayTemplate)
+      for (const c of await this.clients.birthdaysToday(now)) {
+        // Mark first: a greeting must never go out twice; a failure is logged by WhatsApp.
+        await this.clients.greeted(c.phone, now);
+        const result = await this.whatsapp.send(
+          wa,
+          '7' + c.phone,
+          [c.name || 'уважаемый клиент', String(settings.birthdayDiscount)],
+          wa.birthdayTemplate,
+        );
+        if (result.ok) birthdays++;
+        else await this.clients.ungreet(c.phone);
+      }
+    return { reviews, returns, birthdays };
   }
 }

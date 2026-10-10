@@ -153,3 +153,15 @@ model Setting {
   value Json
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
 }
+/// What the salon knows about a client, keyed by the last 10 digits of their phone.
+model Client {
+  phone String @id
+  note String @default("")
+  /// Birthday as MM-DD (no year).
+  birthday String?
+  /// Site bookings are refused; the client is asked to write in WhatsApp.
+  blocked Boolean @default(false)
+  /// Year of the last birthday greeting, so it goes out once a year.
+  greetedYear Int?
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+}

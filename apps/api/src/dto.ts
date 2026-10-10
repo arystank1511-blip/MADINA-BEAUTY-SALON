@@ -60,6 +60,14 @@ export class BookingRequestDto {
   @IsString()
   @Matches(/^[+\d\s()-]{10,30}$/, { message: 'Укажите телефон, например +7 777 123 45 67.' })
   phone!: string;
+  @ApiProperty({
+    required: false,
+    example: '03-15',
+    description: 'День рождения ММ-ДД, по желанию',
+  })
+  @IsOptional()
+  @Matches(/^(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/, { message: 'День рождения в виде ММ-ДД.' })
+  birthday?: string;
 }
 const trim = ({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value);
 export class QuickBookingDto extends BookingDto {
@@ -220,6 +228,13 @@ export class WhatsAppSettingsDto {
     message: 'Имя шаблона — латиница в нижнем регистре, цифры и «_».',
   })
   returnTemplate?: string;
+  @ApiProperty({ required: false, description: 'Шаблон поздравления: {{1}} имя, {{2}} скидка %' })
+  @IsOptional()
+  @IsString()
+  @Matches(/^[a-z0-9_]{0,512}$/, {
+    message: 'Имя шаблона — латиница в нижнем регистре, цифры и «_».',
+  })
+  birthdayTemplate?: string;
   @ApiProperty({ description: 'Язык шаблона, например ru' })
   @IsString()
   @Matches(/^[a-z]{2,3}(_[A-Z]{2})?$/, { message: 'Код языка, например ru или en_US.' })
@@ -242,6 +257,12 @@ export class GrowthSettingsDto {
   @Min(2)
   @Max(26)
   returnWeeks!: number;
+  @ApiProperty({ description: 'Скидка в день рождения, %' })
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(100)
+  birthdayDiscount!: number;
 }
 export class PaymentDto {
   @ApiProperty({ description: 'Фактически оплачено, в минимальных единицах (тиын)' })
@@ -262,4 +283,22 @@ export class StatsQuery {
   @IsOptional()
   @Matches(/^\d{4}-\d{2}-\d{2}$/)
   to?: string;
+}
+export class ClientDto {
+  @ApiProperty({ description: 'Заметка мастера: краска, пожелания' })
+  @IsString()
+  @Length(0, 2000)
+  note!: string;
+  @ApiProperty({ required: false, nullable: true, example: '03-15', description: 'ММ-ДД' })
+  @IsOptional()
+  @Matches(/^(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/, { message: 'День рождения в виде ММ-ДД.' })
+  birthday?: string | null;
+  @ApiProperty() @IsBoolean() blocked!: boolean;
+}
+export class ClientsQuery {
+  @ApiProperty({ required: false, description: 'Имя или часть номера' })
+  @IsOptional()
+  @IsString()
+  @Length(0, 80)
+  q?: string;
 }

@@ -7,6 +7,7 @@ import { Telegram } from './telegram';
 import { activeAt } from './booking/booking.service';
 import { WhatsApp } from './whatsapp';
 import { Growth } from './growth';
+import { Clients } from './clients';
 import { salonDate, startOfDay } from './availability/rules';
 import { Prisma } from '@prisma/client';
 
@@ -48,6 +49,7 @@ export class Reminders {
     private telegram: Telegram,
     private whatsapp: WhatsApp,
     private growth: Growth,
+    private clients: Clients,
   ) {}
   private window(now: Date) {
     return { gt: now, lte: new Date(+now + REMIND_MINUTES * 60000) };
@@ -101,6 +103,7 @@ export class Reminders {
       month: 'long',
     }).format(now);
     const pending = today.filter((a) => a.status === 'PENDING').length;
+    const birthdays = await this.clients.birthdaysToday(now);
     const ok = await this.telegram.notify([
       `Доброе утро! Сегодня, ${day} · ${config.name}`,
       today.length ? `Записей: ${today.length}` : 'Записей на сегодня пока нет.',
@@ -111,6 +114,11 @@ export class Reminders {
           (a.guestPhone ? ` · ${a.guestPhone}` : ''),
       ),
       ...(pending ? [`Ждут подтверждения: ${pending}. Ответьте в «Мой день».`] : []),
+      ...(birthdays.length
+        ? [
+            `День рождения: ${birthdays.map((b) => `${b.name || 'клиент'} (${b.displayPhone})`).join(', ')}. Поздравьте во вкладке «Возврат клиентов».`,
+          ]
+        : []),
     ]);
     // Telegram was down: release the claim so a later run sends the summary.
     if (!ok) await this.db.setting.delete({ where: { key } });

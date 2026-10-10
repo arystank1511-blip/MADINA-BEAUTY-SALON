@@ -803,15 +803,21 @@ describe.sequential('real PostgreSQL, HTTP and independent Nest instances', () =
     const weeks6 = 6 * 7 * 24;
     try {
       expect(
-        (await call('/admin/growth', 'PUT', { reviewUrl: 'http://x', returnWeeks: 5 }, admin))
-          .status,
+        (
+          await call(
+            '/admin/growth',
+            'PUT',
+            { reviewUrl: 'http://x', returnWeeks: 5, birthdayDiscount: 10 },
+            admin,
+          )
+        ).status,
       ).toBe(400);
       expect(
         (
           await call(
             '/admin/growth',
             'PUT',
-            { reviewUrl: 'https://2gis.kz/firm/1', returnWeeks: 5 },
+            { reviewUrl: 'https://2gis.kz/firm/1', returnWeeks: 5, birthdayDiscount: 10 },
             admin,
           )
         ).status,
@@ -966,6 +972,121 @@ describe.sequential('real PostgreSQL, HTTP and independent Nest instances', () =
       expect((await call('/admin/stats', 'GET', undefined, c1)).status).toBe(403);
     } finally {
       await db.appointment.deleteMany({ where: { id: { in: created } } });
+    }
+  });
+  it('client cards by phone: history, notes, birthday, block list and birthday greetings', async () => {
+    const tag = String(Math.floor(Math.random() * 1e7)).padStart(7, '0');
+    const key = `777${tag}`;
+    const today = salonDate(new Date(), 'Asia/Almaty');
+    const day = Temporal.PlainDate.from(today).subtract({ days: 300 }).toString();
+    const created: string[] = [];
+    const visit = async (time: string, phone: string, status: 'COMPLETED' | 'NO_SHOW') => {
+      const startsAt = localInstant(day, time, 'Asia/Almaty');
+      const a = await db.appointment.create({
+        data: {
+          masterId: master2,
+          serviceId: service,
+          guestName: 'Сауле',
+          guestPhone: phone,
+          serviceName: 'Тестовая стрижка',
+          priceMinor: 250000,
+          paidMinor: status === 'COMPLETED' ? 300000 : null,
+          durationMinutes: 30,
+          bufferAfterMinutes: 0,
+          startsAt,
+          endsAt: new Date(+startsAt + 30 * 60000),
+          occupiedUntil: new Date(+startsAt + 30 * 60000),
+          status,
+        },
+      });
+      created.push(a.id);
+    };
+    try {
+      await visit(
+        '10:00',
+        `8 (777) ${tag.slice(0, 3)}-${tag.slice(3, 5)}-${tag.slice(5)}`,
+        'COMPLETED',
+      );
+      await visit('11:00', `+7 777 ${tag}`, 'NO_SHOW');
+      type Summary = { phone: string; visits: number; noShows: number; spentMinor: number };
+      const list = (await call(`/admin/clients?q=${tag}`, 'GET', undefined, admin))
+        .body as unknown as Summary[];
+      expect(list).toEqual([
+        expect.objectContaining({ phone: key, visits: 1, noShows: 1, spentMinor: 300000 }),
+      ]);
+      expect((await call(`/admin/clients?q=${tag}`, 'GET', undefined, c1)).status).toBe(403);
+      const card = (await call(`/admin/clients/${key}`, 'GET', undefined, admin))
+        .body as unknown as {
+        history: unknown[];
+      };
+      expect(card.history).toHaveLength(2);
+      expect((await call('/admin/clients/123', 'GET', undefined, admin)).status).toBe(400);
+      const save = (body: unknown) => call(`/admin/clients/${key}`, 'PUT', body, admin);
+      expect((await save({ note: 'x', birthday: '13-01', blocked: false })).status).toBe(400);
+      expect((await save({ note: 'краска 6.1', birthday: '03-15', blocked: true })).status).toBe(
+        200,
+      );
+      const dayView = (
+        await call(`/admin/day?date=${day}&masterId=${master2}`, 'GET', undefined, admin)
+      ).body as unknown as { clients: Record<string, { note: string; blocked: boolean }> };
+      expect(dayView.clients[key]).toMatchObject({ note: 'краска 6.1', blocked: true });
+
+      // A blocked client cannot hold time from the site.
+      const before = await db.appointment.count();
+      // Its own client address, so the per-address request limit of earlier tests does not apply.
+      const request = async (body: unknown) => {
+        const res = await fetch(urls[0] + '/api/v1/booking-requests', {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            origin,
+            'x-csrf-protection': '1',
+            'x-forwarded-for': `203.0.113.${Math.floor(Math.random() * 250) + 1}`,
+          },
+          body: JSON.stringify(body),
+        });
+        return { status: res.status, body: (await res.json()) as Reply };
+      };
+      const refused = await request({
+        ...booking('09:00', master2),
+        name: 'Сауле',
+        phone: `+7 777 ${tag}`,
+      });
+      expect(refused.status).toBe(403);
+      expect(refused.body.code).toBe('BOOKING_BY_WHATSAPP');
+      expect(await db.appointment.count()).toBe(before);
+
+      // A birthday given on the site is remembered; today's birthdays show up for greeting once.
+      const other = `701${tag}`;
+      const held = await request({
+        serviceId: service,
+        masterId: master,
+        startsAt: localInstant(
+          Temporal.PlainDate.from(today)
+            .add({ days: 20 + Math.floor(Math.random() * 35) })
+            .toString(),
+          '10:00',
+          'Asia/Almaty',
+        ).toISOString(),
+        name: 'Арман',
+        phone: `+7 ${other}`,
+        birthday: today.slice(5),
+      });
+      expect(held.status).toBe(201);
+      created.push(held.body.id);
+      expect((await db.client.findUniqueOrThrow({ where: { phone: other } })).birthday).toBe(
+        today.slice(5),
+      );
+      type Growth = { birthdays: { phone: string; text: string }[] };
+      let growth = (await call('/admin/growth', 'GET', undefined, admin)).body as unknown as Growth;
+      expect(growth.birthdays.find((b) => b.phone === other)?.text).toContain('С днём рождения');
+      await call(`/admin/clients/${other}/greeted`, 'PATCH', {}, admin);
+      growth = (await call('/admin/growth', 'GET', undefined, admin)).body as unknown as Growth;
+      expect(growth.birthdays.some((b) => b.phone === other)).toBe(false);
+      await db.client.delete({ where: { phone: other } });
+    } finally {
+      await db.appointment.deleteMany({ where: { id: { in: created } } });
+      await db.client.deleteMany({ where: { phone: key } });
     }
   });
   it('rate limits abusive client without blocking another behind the trusted proxy', async () => {

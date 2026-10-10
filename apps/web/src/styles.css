@@ -2391,7 +2391,8 @@ header {
   margin-top: 12px;
   flex-wrap: wrap;
 }
-.md-contacts a {
+.md-contacts a,
+.md-contacts button {
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -2927,4 +2928,95 @@ td button.confirm-button {
   .stats-range .segmented {
     grid-column: 1 / -1;
   }
+}
+/* Clients */
+.birthday-input {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+.birthday-input legend {
+  margin-bottom: 8px;
+  padding: 0;
+}
+.birthday-input select {
+  width: auto;
+  min-width: 110px;
+}
+.client-card {
+  display: grid;
+  gap: 14px;
+}
+.client-contacts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  align-items: center;
+}
+.client-contacts a {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  color: var(--whatsapp);
+}
+.client-history {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 320px;
+  overflow: auto;
+  border-top: 1px solid var(--line);
+}
+.client-history li {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+}
+.client-history li.cancelled {
+  color: var(--muted);
+}
+.client-history li.no_show span:last-child {
+  color: var(--accent);
+}
+.md-note {
+  margin: 8px 0 0;
+  padding: 10px 12px;
+  background: #1d1a10;
+  border-left: 3px solid #ffd75e;
+  font-size: 15px;
+  white-space: pre-wrap;
+}
+.md-birthday {
+  color: #ffd75e;
+  font-weight: 700;
+}
+.client-flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+.client-flags .badge {
+  font-size: 11px;
+}
+tr.clickable {
+  cursor: pointer;
+}
+tr.clickable:hover td {
+  background: var(--surface);
+}
+.client-search {
+  max-width: 420px;
+  margin-bottom: 18px;
+}
+.client-note {
+  white-space: pre-wrap;
+  max-width: 330px;
 }
