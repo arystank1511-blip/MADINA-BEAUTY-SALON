@@ -25,6 +25,7 @@ import { VisitController, VisitLinks, Waitlist } from './visit';
 import { Loyalty } from './loyalty';
 import { WeeklyReport } from './report';
 import { GiftAdminController, GiftController, Gifts } from './gift';
+import { Money, MoneyController } from './money';
 import { config, isAllowedOrigin } from './config';
 @Module({
   controllers: [
@@ -34,6 +35,7 @@ import { config, isAllowedOrigin } from './config';
     PublicController,
     GiftController,
     GiftAdminController,
+    MoneyController,
     RemindersController,
     PushController,
     VisitController,
@@ -55,6 +57,7 @@ import { config, isAllowedOrigin } from './config';
     Loyalty,
     WeeklyReport,
     Gifts,
+    Money,
   ],
 })
 export class AppModule {}
