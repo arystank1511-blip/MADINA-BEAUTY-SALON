@@ -1268,6 +1268,180 @@ describe.sequential('real PostgreSQL, HTTP and independent Nest instances', () =
       await db.user.deleteMany({ where: { email } });
     }
   });
+  it('personal link lets the client move or cancel; waitlist hears about freed time', async () => {
+    process.env.PUSH_DRY_RUN = '1';
+    const endpoint = `https://push.example.com/${randomUUID()}`;
+    const keys = { p256dh: 'BOr'.padEnd(87, 'y'), auth: 'auth-secret-2' };
+    const ip = `203.0.113.${Math.floor(Math.random() * 250) + 1}`;
+    const post = async (path: string, body: unknown) => {
+      const res = await fetch(urls[0] + '/api/v1' + path, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          origin,
+          'x-csrf-protection': '1',
+          'x-forwarded-for': ip,
+        },
+        body: JSON.stringify(body),
+      });
+      return { status: res.status, body: (await res.json()) as Record<string, string> };
+    };
+    const day = Temporal.PlainDate.from(salonDate(new Date(), 'Asia/Almaty'))
+      .add({ days: 20 + Math.floor(Math.random() * 35) })
+      .toString();
+    const at = (time: string) => localInstant(day, time, 'Asia/Almaty').toISOString();
+    const phone = `+7 702 ${String(Math.floor(Math.random() * 1e7)).padStart(7, '0')}`;
+    try {
+      expect((await call('/push/subscribe', 'POST', { endpoint, keys }, admin)).status).toBe(201);
+      const { Push } = loadCompiled('../dist/src/push.js') as {
+        Push: new (...args: never[]) => {
+          sent: { endpoint: string; message: { title: string; body: string } }[];
+        };
+      };
+      const sent = apps[0].get(Push).sent;
+      const mine = () => sent.filter((s) => s.endpoint === endpoint).map((s) => s.message.title);
+
+      const held = await post('/booking-requests', {
+        serviceId: service,
+        masterId: master,
+        startsAt: at('11:00'),
+        name: 'Динара',
+        phone,
+      });
+      expect(held.status).toBe(201);
+      const ref = held.body.manageUrl.split('/v/')[1];
+      expect(ref).toMatch(new RegExp(`^${held.body.id}\\.[A-Za-z0-9_-]{22}$`));
+      const shown = await call(`/visit/${ref}`);
+      expect(shown.body).toMatchObject({ name: 'Динара', status: 'PENDING', canChange: true });
+      // Forged or foreign links reveal nothing.
+      const forged = ref.slice(0, -1) + (ref.endsWith('A') ? 'B' : 'A');
+      expect((await call(`/visit/${forged}`)).status).toBe(404);
+      expect((await call(`/visit/${randomUUID()}.${ref.split('.')[1]}`)).status).toBe(404);
+      expect((await call(`/visit/${held.body.id}`)).status).toBe(404);
+
+      // Someone waits for this day; joining twice keeps one entry.
+      expect((await post('/waitlist', { date: day, name: 'Ж', phone })).status).toBe(400);
+      expect((await post('/waitlist', { date: day, name: 'Жанна', phone: '12345' })).status).toBe(
+        400,
+      );
+      expect(
+        (await post('/waitlist', { date: '2020-01-01', name: 'Жанна', phone: '+7 703 111 22 33' }))
+          .status,
+      ).toBe(400);
+      for (const name of ['Жанна', 'Жанна К.'])
+        expect(
+          (await post('/waitlist', { date: day, name, phone: '8 703 111 22 33' })).status,
+        ).toBe(201);
+      const waiting = await db.waitlistEntry.findMany({ where: { date: day } });
+      expect(waiting.map((w) => [w.name, w.phone])).toEqual([['Жанна К.', '77031112233']]);
+
+      // Moving onto a taken time changes nothing.
+      const other = await post('/booking-requests', {
+        serviceId: service,
+        masterId: master,
+        startsAt: at('15:00'),
+        name: 'Другая',
+        phone: '+7 701 999 88 77',
+      });
+      expect(other.status).toBe(201);
+      expect(
+        (await call(`/visit/${ref}/reschedule`, 'POST', { startsAt: at('15:00') })).status,
+      ).toBe(409);
+      expect((await db.appointment.findUniqueOrThrow({ where: { id: held.body.id } })).status).toBe(
+        'PENDING',
+      );
+      const moved = await call(`/visit/${ref}/reschedule`, 'POST', { startsAt: at('13:00') });
+      expect(moved.status).toBe(201);
+      const newRef = (moved.body as unknown as { ref: string }).ref;
+      expect((await db.appointment.findUniqueOrThrow({ where: { id: held.body.id } })).status).toBe(
+        'CANCELLED',
+      );
+      const now = await call(`/visit/${newRef}`);
+      expect(now.body).toMatchObject({ startsAt: at('13:00'), status: 'PENDING', name: 'Динара' });
+      expect(mine()).toContain('Перенос: Динара');
+      expect(mine().some((t) => t.startsWith('Освободилось'))).toBe(true);
+      // The freed 11:00 is bookable again.
+      const slots = await call(`/availability?serviceId=${service}&masterId=${master}&date=${day}`);
+      expect(slots.body.slots.map((s) => s.startsAt)).toContain(at('11:00'));
+
+      // The master sees the waitlist and the client links, and crosses off whom she offered.
+      const view = (
+        await call(`/admin/day?date=${day}&masterId=${master}`, 'GET', undefined, admin)
+      ).body as unknown as {
+        waitlist: { id: string; name: string }[];
+        appointments: { id: string; manageUrl: string }[];
+      };
+      expect(view.waitlist.map((w) => w.name)).toEqual(['Жанна К.']);
+      expect(view.appointments.find((a) => a.id === now.body.id)?.manageUrl).toMatch(
+        new RegExp(`/v/${newRef.replace('.', '\\.')}$`),
+      );
+      expect(
+        (await call(`/admin/waitlist/${view.waitlist[0].id}/contacted`, 'PATCH', {}, c1)).status,
+      ).toBe(403);
+      await call(`/admin/waitlist/${view.waitlist[0].id}/contacted`, 'PATCH', {}, admin);
+      expect(
+        (
+          (await call(`/admin/day?date=${day}&masterId=${master}`, 'GET', undefined, admin))
+            .body as unknown as {
+            waitlist: unknown[];
+          }
+        ).waitlist,
+      ).toEqual([]);
+
+      // Cancelling by link frees the time; the old link no longer works for changes.
+      expect((await call(`/visit/${newRef}/cancel`, 'POST')).body.status).toBe('CANCELLED');
+      expect(mine()).toContain('Отмена: Динара');
+      expect((await call(`/visit/${newRef}`)).body).toMatchObject({
+        status: 'CANCELLED',
+        canChange: false,
+      });
+      expect((await call(`/visit/${newRef}/cancel`, 'POST')).body.code).toBe('TOO_LATE');
+      expect(
+        (await call(`/visit/${ref}/reschedule`, 'POST', { startsAt: at('17:00') })).status,
+      ).toBe(409);
+
+      // Less than two hours before the visit the client writes in WhatsApp instead.
+      const soon = new Date(Date.now() + 60 * 60000);
+      const lone = await db.master.create({
+        data: { name: 'Отдельный мастер', description: 'test' },
+      });
+      const close = await db.appointment.create({
+        data: {
+          guestName: 'Скоро',
+          guestPhone: '+7 701 555 44 33',
+          masterId: lone.id,
+          serviceId: service,
+          startsAt: soon,
+          endsAt: new Date(+soon + 60 * 60000),
+          occupiedUntil: new Date(+soon + 60 * 60000),
+          serviceName: 'Тест',
+          priceMinor: 0,
+          durationMinutes: 60,
+          bufferAfterMinutes: 0,
+        },
+      });
+      const { VisitLinks } = loadCompiled('../dist/src/visit.js') as {
+        VisitLinks: new (...args: never[]) => { ref(id: string): Promise<string> };
+      };
+      const closeRef = await apps[0].get(VisitLinks).ref(close.id);
+      expect((await call(`/visit/${closeRef}`)).body).toMatchObject({
+        status: 'CONFIRMED',
+        canChange: false,
+      });
+      const late = await call(`/visit/${closeRef}/cancel`, 'POST');
+      expect([late.status, late.body.code]).toEqual([409, 'TOO_LATE']);
+      expect((await db.appointment.findUniqueOrThrow({ where: { id: close.id } })).status).toBe(
+        'CONFIRMED',
+      );
+      await db.appointment.updateMany({
+        where: { id: { in: [close.id, other.body.id] } },
+        data: { status: 'CANCELLED', cancelledAt: new Date(), holdUntil: null },
+      });
+    } finally {
+      delete process.env.PUSH_DRY_RUN;
+      await db.pushSubscription.deleteMany({ where: { endpoint } });
+    }
+  });
   it('rate limits abusive client without blocking another behind the trusted proxy', async () => {
     const attempt = async (ip: string) =>
       fetch(urls[0] + '/api/v1/auth/login', {

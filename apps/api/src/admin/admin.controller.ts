@@ -52,6 +52,7 @@ import { Growth } from '../growth';
 import { Stats } from '../stats';
 import { Clients } from '../clients';
 import { Site } from '../site';
+import { VisitLinks, Waitlist } from '../visit';
 /** Comparable phone key: the last 10 digits, so +7 777…, 8 777… and 777… match. */
 export const phoneKey = (phone: string | null | undefined) => {
   const digits = (phone || '').replace(/\D/g, '');
@@ -72,6 +73,8 @@ export class AdminController {
     private stats: Stats,
     private clients: Clients,
     private site: Site,
+    private links: VisitLinks,
+    private waitlist: Waitlist,
   ) {}
   private async schedule<T>(id: string, mutate: (tx: Tx) => Promise<T>) {
     return this.db.$transaction(
@@ -276,8 +279,9 @@ export class AdminController {
   }
   @Get('appointments')
   @ApiOperation({ summary: 'Все посещения с фильтрами и пагинацией' })
-  appointments(@Query() q: ListDto) {
-    return this.booking.list(q);
+  async appointments(@Query() q: ListDto) {
+    const page = await this.booking.list(q);
+    return { ...page, items: await this.links.withLinks(page.items) };
   }
   @Post('appointments')
   @ApiOperation({ summary: 'Записать существующего клиента по общим правилам доступности' })
@@ -389,18 +393,26 @@ export class AdminController {
           endsAt: at(b.endTime),
         })),
       timeOffs,
-      appointments,
+      appointments: await this.links.withLinks(appointments),
+      waitlist: await this.waitlist.list(date),
     };
   }
   @Staff()
   @Get('pending')
   @ApiOperation({ summary: 'Заявки с сайта, ожидающие подтверждения мастера' })
-  pending() {
-    return this.db.appointment.findMany({
+  async pending() {
+    const visits = await this.db.appointment.findMany({
       where: { status: 'PENDING', holdUntil: { gt: new Date() } },
       include: appointmentInclude,
       orderBy: { startsAt: 'asc' },
     });
+    return this.links.withLinks(visits);
+  }
+  @Staff()
+  @Patch('waitlist/:id/contacted')
+  @ApiOperation({ summary: 'Клиенту из листа ожидания предложили время' })
+  waitlistContacted(@Param('id', ParseUUIDPipe) id: string) {
+    return this.waitlist.contacted(id);
   }
   @Get('reminders')
   @ApiOperation({ summary: 'Визиты на ближайшие сутки: кому напомнить и кому уже напомнили' })
@@ -408,7 +420,7 @@ export class AdminController {
     const now = new Date();
     // Opening the admin also sends any due Telegram heads-up, in case the schedule ran late.
     await this.reminders.run(now);
-    return this.db.appointment.findMany({
+    const upcoming = await this.db.appointment.findMany({
       where: {
         ...activeAt(now),
         status: { in: ['CONFIRMED', 'PENDING'] },
@@ -417,6 +429,7 @@ export class AdminController {
       include: appointmentInclude,
       orderBy: { startsAt: 'asc' },
     });
+    return this.links.withLinks(upcoming);
   }
   @Get('master-login')
   @ApiOperation({ summary: 'Логин мастера для «Мой день» (без пароля)' })
@@ -620,8 +633,14 @@ export class AdminController {
   @Staff()
   @Patch('appointments/:id/cancel')
   @ApiOperation({ summary: 'Отменить будущую запись' })
-  cancel(@Param('id', ParseUUIDPipe) id: string, @Req() req: AuthRequest) {
-    return this.booking.change(id, req.actor);
+  async cancel(@Param('id', ParseUUIDPipe) id: string, @Req() req: AuthRequest) {
+    const before = await this.db.appointment.findUnique({
+      where: { id },
+      select: { status: true },
+    });
+    const a = await this.booking.change(id, req.actor);
+    if (before?.status !== 'CANCELLED') await this.waitlist.freed(a);
+    return a;
   }
   @Staff()
   @Patch('appointments/:id/no-show')

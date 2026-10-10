@@ -83,11 +83,13 @@ export class BookingService {
    * Books a visit after re-checking availability under the master lock.
    * `pending` holds the slot for HOLD_MINUTES until the master confirms it;
    * `walkIn` lets the master book slots starting right now (clients need 30 minutes' notice).
+   * `replaces` moves a visit: the old one is cancelled in the same transaction, so a failed
+   * move leaves it untouched and its own time can be reused.
    */
   async book(
     body: BookingDto,
     client: Client,
-    options: { pending?: boolean; walkIn?: boolean } = {},
+    options: { pending?: boolean; walkIn?: boolean; replaces?: string } = {},
   ) {
     return this.db.$transaction(
       async (tx) => {
@@ -104,6 +106,11 @@ export class BookingService {
         }
         const now = new Date();
         await this.expireHolds(tx, body.masterId, now);
+        if (options.replaces)
+          await tx.appointment.update({
+            where: { id: options.replaces },
+            data: { status: 'CANCELLED', cancelledAt: now, holdUntil: null },
+          });
         const start = new Date(body.startsAt);
         const { service, slots } = await this.availability(
           tx,

@@ -44,6 +44,8 @@ interface Day {
   /** Salon notes per phone key. */
   clients: Record<string, ClientInfo>;
   appointments: Appointment[];
+  /** Clients who asked to be told if this day frees up. */
+  waitlist: { id: string; name: string; phone: string; createdAt: string }[];
 }
 type Row =
   | { kind: 'free'; at: string }
@@ -318,6 +320,7 @@ export function MasterDay({ config }: { config: Config }) {
           {day.data.hours && !rows(day.data).some((r) => r.kind === 'free') && (
             <p className="md-summary">На этот день свободного времени не осталось.</p>
           )}
+          <Waiting day={day.data} config={config} onDone={refresh} />
         </>
       )}
 
@@ -545,5 +548,42 @@ function AddVisit({
         </button>
       </form>
     </Modal>
+  );
+}
+
+/** The day's waitlist: one tap offers the freed time in WhatsApp and crosses the client off. */
+function Waiting({ day, config, onDone }: { day: Day; config: Config; onDone: () => void }) {
+  const mark = useMutation({
+    mutationFn: (id: string) => send(`/admin/waitlist/${id}/contacted`, 'PATCH'),
+    onSettled: onDone,
+  });
+  if (!day.waitlist?.length) return null;
+  const when = dateLabel(day.date + 'T12:00:00Z', 'UTC').replace(/ \d{4} г\.$/, '');
+  return (
+    <div className="md-waitlist" role="region" aria-label="Лист ожидания">
+      <h3>Ждут этот день: {day.waitlist.length}</h3>
+      <p className="md-summary">Освободилось время — предложите его. Клиент запишется сам.</p>
+      {day.waitlist.map((w) => (
+        <div className="md-wait" key={w.id}>
+          <span>
+            <strong>{w.name}</strong>
+            <br />
+            <a href={`tel:+${w.phone}`}>+{w.phone}</a>
+          </span>
+          <a
+            className="md-btn yes"
+            href={`https://wa.me/${w.phone}?text=${encodeURIComponent(
+              `Здравствуйте, ${w.name}! В салоне «${config.name}» освободилось время ${when}. ` +
+                `Записаться: ${location.origin}/book?date=${day.date}`,
+            )}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={() => mark.mutate(w.id)}
+          >
+            <WhatsAppIcon size={20} /> Предложить
+          </a>
+        </div>
+      ))}
+    </div>
   );
 }

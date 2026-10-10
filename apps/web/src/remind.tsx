@@ -36,7 +36,10 @@ function reminderText(a: Appointment, config: Config) {
     `Здравствуйте${a.guestName ? ', ' + a.guestName : ''}!`,
     `Напоминаю, вы записаны ${when} в ${timeLabel(a.startsAt, config.timezone)} — ${a.serviceName}.`,
     `Салон «${config.name}», ${config.address}.`,
-    'Если планы изменятся, напишите, пожалуйста. Спасибо!',
+    a.manageUrl
+      ? `Перенести или отменить: ${a.manageUrl}`
+      : 'Если планы изменятся, напишите, пожалуйста.',
+    'Спасибо!',
   ].join('\n');
 }
 

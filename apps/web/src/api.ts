@@ -58,6 +58,8 @@ export interface Appointment {
   status: 'PENDING' | 'CONFIRMED' | 'CANCELLED' | 'COMPLETED' | 'NO_SHOW';
   master: { id: string; name: string };
   customer: User | null;
+  /** Client's personal link to move or cancel the visit (staff lists only). */
+  manageUrl?: string;
 }
 /** Display name of whoever the visit is for: account holder or a guest named by the master. */
 export const clientName = (a: Pick<Appointment, 'customer' | 'guestName'>) =>

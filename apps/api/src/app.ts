@@ -21,6 +21,7 @@ import { Stats } from './stats';
 import { Clients } from './clients';
 import { Site } from './site';
 import { Push, PushController } from './push';
+import { VisitController, VisitLinks, Waitlist } from './visit';
 import { config, isAllowedOrigin } from './config';
 @Module({
   controllers: [
@@ -30,6 +31,7 @@ import { config, isAllowedOrigin } from './config';
     PublicController,
     RemindersController,
     PushController,
+    VisitController,
   ],
   providers: [
     Db,
@@ -43,6 +45,8 @@ import { config, isAllowedOrigin } from './config';
     Clients,
     Site,
     Push,
+    VisitLinks,
+    Waitlist,
   ],
 })
 export class AppModule {}

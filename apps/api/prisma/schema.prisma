@@ -190,3 +190,18 @@ model PushSubscription {
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   @@index([userId])
 }
+/// «Сообщите, если освободится»: a client waiting for a free time on a full day.
+model WaitlistEntry {
+  id String @id @default(uuid()) @db.Uuid
+  /// Salon date, YYYY-MM-DD.
+  date String
+  serviceId String? @db.Uuid
+  name String
+  /// International digits, 7XXXXXXXXXX.
+  phone String
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  /// When the salon offered a time (the entry leaves the list).
+  contactedAt DateTime? @db.Timestamptz(3)
+  @@unique([date, phone])
+  @@index([date])
+}
