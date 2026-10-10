@@ -7,6 +7,7 @@ import { AvailabilityDto, BookingRequestDto, MasterQuery } from './dto';
 import { fail } from './errors';
 import { Telegram } from './telegram';
 import { BookingService } from './booking/booking.service';
+import { intlPhone } from './reminders';
 @ApiTags('Публичные')
 @Controller()
 export class PublicController {
@@ -58,6 +59,9 @@ export class PublicController {
     hits.count++;
     this.requests.set(key, hits);
     if (hits.count > 5) fail(429, 'RATE_LIMIT', 'Слишком много заявок. Подождите одну минуту.');
+    // The phone is how the salon confirms and reminds; it must be a full number.
+    if (!intlPhone(body.phone))
+      fail(400, 'INVALID_PHONE', 'Укажите телефон полностью, например +7 777 123 45 67.');
     const a = await this.booking.book(
       body,
       { guestName: body.name, guestPhone: body.phone },
@@ -74,6 +78,7 @@ export class PublicController {
     const price = new Intl.NumberFormat('ru-RU', {
       style: 'currency',
       currency: config.currency,
+      currencyDisplay: 'narrowSymbol',
       maximumFractionDigits: 2,
     }).format(a.priceMinor / 100);
     const telegram = await this.telegram.notify([
@@ -82,7 +87,7 @@ export class PublicController {
       `Мастер: ${a.master.name}`,
       `Время: ${when}`,
       `Имя: ${body.name}`,
-      ...(body.phone ? [`Телефон: ${body.phone}`] : []),
+      `Телефон: ${body.phone}`,
       'Время придержано на 3 часа. Подтвердите в «Мой день».',
     ]);
     return { id: a.id, startsAt: a.startsAt, holdUntil: a.holdUntil, telegram };

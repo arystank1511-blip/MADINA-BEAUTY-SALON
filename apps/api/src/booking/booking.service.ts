@@ -176,7 +176,8 @@ export class BookingService {
         if (action === 'noShow') {
           if (actor.role !== 'ADMIN') fail(403, 'FORBIDDEN', 'Доступ запрещён.');
           if (a.status === 'NO_SHOW') return a;
-          if (a.status !== 'CONFIRMED' || a.startsAt > new Date())
+          // Visits are completed automatically the next morning, so a late «не пришёл» still works.
+          if ((a.status !== 'CONFIRMED' && a.status !== 'COMPLETED') || a.startsAt > new Date())
             fail(409, 'INVALID_STATUS', 'Отметить «не пришёл» можно только после начала записи.');
           return tx.appointment.update({
             where: { id },

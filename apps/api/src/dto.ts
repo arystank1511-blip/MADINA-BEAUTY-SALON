@@ -55,12 +55,11 @@ export class BookingRequestDto {
   @IsString()
   @Length(2, 80)
   name!: string;
-  @ApiProperty({ required: false, example: '+7 700 000 00 00' })
-  @IsOptional()
+  @ApiProperty({ example: '+7 700 000 00 00' })
   @Transform(({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value))
   @IsString()
-  @Matches(/^[+\d\s()-]{0,30}$/)
-  phone?: string;
+  @Matches(/^[+\d\s()-]{10,30}$/, { message: 'Укажите телефон, например +7 777 123 45 67.' })
+  phone!: string;
 }
 const trim = ({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value);
 export class QuickBookingDto extends BookingDto {

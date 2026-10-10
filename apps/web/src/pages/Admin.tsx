@@ -28,6 +28,9 @@ export const statusNames = {
   COMPLETED: 'Завершена',
   NO_SHOW: 'Не пришёл',
 };
+/** A site request nobody confirmed within the hold: its time is free again. */
+const expired = (a: Appointment) =>
+  a.status === 'PENDING' && !!a.holdUntil && Date.parse(a.holdUntil) <= Date.now();
 const days = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота', 'Воскресенье'];
 const fd = (e: FormEvent<HTMLFormElement>) => {
   e.preventDefault();
@@ -83,7 +86,7 @@ function Appointments({ config }: { config: Config }) {
     [filter, setFilter] = useState({ from: '', to: '', masterId: '', status: '' }),
     [action, setAction] = useState<{
       appointment: Appointment;
-      type: 'cancel' | 'complete' | 'no-show';
+      type: 'cancel' | 'complete' | 'no-show' | 'confirm';
     } | null>(null);
   const client = useQueryClient(),
     masters = useMasters(true);
@@ -101,8 +104,8 @@ function Appointments({ config }: { config: Config }) {
       send(`/admin/appointments/${action!.appointment.id}/${action!.type}`, 'PATCH'),
     onSuccess: () => {
       setAction(null);
-      void client.invalidateQueries({ queryKey: ['appointments'] });
-      void client.invalidateQueries({ queryKey: ['availability'] });
+      for (const key of ['appointments', 'availability', 'day', 'pending', 'reminders'])
+        void client.invalidateQueries({ queryKey: [key] });
     },
   });
   const change = (key: string, value: string) => {
@@ -186,13 +189,29 @@ function Appointments({ config }: { config: Config }) {
                       </td>
                       <td>{money(a.priceMinor, config.currency)}</td>
                       <td>
-                        <span className={`badge ${a.status.toLowerCase()}`}>
-                          {statusNames[a.status]}
-                        </span>
+                        {expired(a) ? (
+                          <span className="badge cancelled">Истекла, не подтвердили</span>
+                        ) : (
+                          <span className={`badge ${a.status.toLowerCase()}`}>
+                            {statusNames[a.status]}
+                          </span>
+                        )}
                         <Reminded a={a} config={config} />
                       </td>
                       <td>
+                        {a.status === 'PENDING' && !expired(a) && (
+                          <button
+                            className="confirm-button"
+                            onClick={() => {
+                              mutation.reset();
+                              setAction({ appointment: a, type: 'confirm' });
+                            }}
+                          >
+                            Подтвердить
+                          </button>
+                        )}
                         {(a.status === 'CONFIRMED' || a.status === 'PENDING') &&
+                          !expired(a) &&
                           new Date(a.startsAt) > new Date() && (
                             <button
                               onClick={() => {
@@ -204,19 +223,23 @@ function Appointments({ config }: { config: Config }) {
                             </button>
                           )}
                         {(a.status === 'CONFIRMED' || a.status === 'PENDING') &&
+                          !expired(a) &&
                           new Date(a.startsAt) > new Date() && (
                             <Remind a={a} config={config} className="table-remind" />
                           )}
-                        {a.status === 'CONFIRMED' && new Date(a.startsAt) <= new Date() && (
-                          <button
-                            onClick={() => {
-                              mutation.reset();
-                              setAction({ appointment: a, type: 'no-show' });
-                            }}
-                          >
-                            Не пришёл
-                          </button>
-                        )}
+                        {(a.status === 'CONFIRMED' ||
+                          (a.status === 'COMPLETED' &&
+                            Date.now() - Date.parse(a.startsAt) < 7 * 86400000)) &&
+                          new Date(a.startsAt) <= new Date() && (
+                            <button
+                              onClick={() => {
+                                mutation.reset();
+                                setAction({ appointment: a, type: 'no-show' });
+                              }}
+                            >
+                              Не пришёл
+                            </button>
+                          )}
                         {a.status === 'CONFIRMED' && new Date(a.endsAt) <= new Date() && (
                           <button
                             onClick={() => {
@@ -258,7 +281,9 @@ function Appointments({ config }: { config: Config }) {
               ? 'Отменить запись?'
               : action.type === 'no-show'
                 ? 'Клиент не пришёл?'
-                : 'Завершить посещение?'
+                : action.type === 'confirm'
+                  ? 'Подтвердить запись?'
+                  : 'Завершить посещение?'
           }
           onClose={() => !mutation.isPending && setAction(null)}
         >
