@@ -11,8 +11,8 @@ import { Telegram } from './telegram';
 import { Push } from './push';
 import { appointmentInclude, BookingService } from './booking/booking.service';
 import { salonDate } from './availability/rules';
-import { RescheduleDto, WaitlistDto } from './dto';
-import { intlPhone } from './reminders';
+import { RateDto, RescheduleDto, WaitlistDto } from './dto';
+import { intlPhone } from './phone';
 import { Loyalty } from './loyalty';
 
 /** Clients may move or cancel up to this long before the visit; later, they write in WhatsApp. */
@@ -54,6 +54,10 @@ export class VisitLinks {
   }
   async url(id: string) {
     return `${config.siteUrl}/v/${await this.ref(id)}`;
+  }
+  /** «Как вам визит?»: the client rates the visit, happy clients go on to 2GIS. */
+  async rateUrl(id: string) {
+    return `${config.siteUrl}/r/${await this.ref(id)}`;
   }
   /** Adds `manageUrl` to visits shown to staff, so reminders can include the link. */
   async withLinks<T extends { id: string }>(visits: T[]) {
@@ -177,7 +181,50 @@ export class VisitController {
       canChange: this.changeable(a),
       changeBeforeMinutes: CHANGE_BEFORE_MINUTES,
       loyalty: programme && number ? { ...programme, number } : null,
+      canRate: this.rateable(a, now),
+      rating: a.rating,
+      reviewUrl: a.rating && a.rating >= 4 ? await this.reviewUrl() : null,
     };
+  }
+  /** The visit has happened: it can be rated. */
+  private rateable(a: { status: string; startsAt: Date }, now = new Date()) {
+    return a.status === 'COMPLETED' || (a.status === 'CONFIRMED' && a.startsAt <= now);
+  }
+  /** Where happy clients leave a public review (2GIS by default), from «Возврат клиентов». */
+  private async reviewUrl() {
+    const row = await this.db.setting.findUnique({ where: { key: 'growth' } });
+    return (row?.value as { reviewUrl?: string } | null)?.reviewUrl || config.map;
+  }
+  @Post('visit/:ref/rate')
+  @ApiOperation({ summary: 'Оценка визита 1–5; 4–5 — ссылка на отзывы, 1–3 — сообщение салону' })
+  async rate(@Param('ref') ref: string, @Body() b: RateDto) {
+    const a = await this.visit(ref);
+    if (!this.rateable(a))
+      fail(409, 'NOT_YET', 'Оценить визит можно после того, как он состоится.');
+    const feedback = b.feedback?.trim() || null;
+    await this.db.appointment.update({
+      where: { id: a.id },
+      data: { rating: b.rating, feedback, ratedAt: new Date() },
+    });
+    // A low rating goes straight to the owner, so the client is heard before writing anywhere.
+    if (b.rating <= 3 && (feedback || a.rating !== b.rating)) {
+      const name = a.guestName ?? a.customer?.name ?? 'Клиент';
+      const stars = '★'.repeat(b.rating) + '☆'.repeat(5 - b.rating);
+      await Promise.all([
+        this.telegram.notify([
+          `Оценка ${stars} · ${config.name}`,
+          `${name}${a.guestPhone ? ', ' + a.guestPhone : ''} — ${a.serviceName}, ${when(a.startsAt)}`,
+          feedback ? `«${feedback}»` : 'Без комментария.',
+          'Свяжитесь с клиентом, пока он не написал отзыв в 2ГИС.',
+        ]),
+        this.push.notifyStaff({
+          title: `Оценка ${b.rating}/5: ${name}`,
+          body: feedback || `${a.serviceName}, ${when(a.startsAt)}`,
+          tag: `rate-${a.id}`,
+        }),
+      ]);
+    }
+    return { rating: b.rating, reviewUrl: b.rating >= 4 ? await this.reviewUrl() : null };
   }
   private refuse(a: Parameters<VisitController['changeable']>[0]) {
     if (!this.changeable(a))

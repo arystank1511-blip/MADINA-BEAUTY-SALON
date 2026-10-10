@@ -10,6 +10,12 @@ export interface LoyaltySettings {
   reward: string;
 }
 const KEY = 'loyalty';
+const REFERRAL = 'referral';
+export interface ReferralSettings {
+  enabled: boolean;
+  /** What both the newcomer and whoever recommended them get, e.g. «скидка 10%». */
+  reward: string;
+}
 /** Comparable phone key: the last 10 digits, so +7 777…, 8 777… and 777… match. */
 const key = (phone: string | null | undefined) => {
   const d = (phone || '').replace(/\D/g, '');
@@ -37,6 +43,28 @@ export class Loyalty {
       update: { value },
     });
     return this.settings();
+  }
+  /** «Приведи подругу»: off until the owner switches it on. */
+  async referral(): Promise<ReferralSettings> {
+    const row = await this.db.setting.findUnique({ where: { key: REFERRAL } });
+    return {
+      enabled: false,
+      reward: 'скидка 10%',
+      ...((row?.value as Partial<ReferralSettings> | null) ?? {}),
+    };
+  }
+  async saveReferral(settings: ReferralSettings) {
+    const value = { ...settings } as unknown as Prisma.InputJsonObject;
+    await this.db.setting.upsert({
+      where: { key: REFERRAL },
+      create: { key: REFERRAL, value },
+      update: { value },
+    });
+    return this.referral();
+  }
+  async activeReferral() {
+    const r = await this.referral();
+    return r.enabled ? { reward: r.reward } : null;
   }
   /** The programme as clients see it, or null when it is off. */
   async active() {

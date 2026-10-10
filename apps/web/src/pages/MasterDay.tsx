@@ -50,6 +50,8 @@ interface Day {
   loyalty: { every: number; reward: string } | null;
   /** Visit id → which visit in a row it is for this client. */
   visitNumbers: Record<string, number>;
+  /** «Приведи подругу», when switched on. */
+  referral: { reward: string } | null;
 }
 type Row =
   | { kind: 'free'; at: string }
@@ -263,6 +265,11 @@ export function MasterDay({ config }: { config: Config }) {
                       onNote={() => setNoting(r.visit)}
                     />
                     <Gift day={day.data} id={r.visit.id} />
+                    {day.data.referral && r.visit.referrerPhone && (
+                      <span className="gift-badge">
+                        🤝 По рекомендации — {day.data.referral.reward}
+                      </span>
+                    )}
                     {r.visit.status === 'PENDING' ? (
                       <div className="md-actions">
                         <button

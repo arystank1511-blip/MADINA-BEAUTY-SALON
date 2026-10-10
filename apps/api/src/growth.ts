@@ -5,6 +5,7 @@ import { config } from './config';
 import { activeAt } from './booking/booking.service';
 import { WhatsApp } from './whatsapp';
 import { Clients } from './clients';
+import { VisitLinks } from './visit';
 
 export interface GrowthSettings {
   /** Where clients leave a review: the salon's 2GIS card by default. */
@@ -44,6 +45,7 @@ export class Growth {
     private db: Db,
     private whatsapp: WhatsApp,
     private clients: Clients,
+    private links: VisitLinks,
   ) {}
   async settings(): Promise<GrowthSettings> {
     const row = await this.db.setting.findUnique({ where: { key: KEY } });
@@ -68,7 +70,7 @@ export class Growth {
     return [
       `Здравствуйте${name ? ', ' + name : ''}!`,
       `Спасибо, что были у нас в «${config.name}».`,
-      `Будем очень рады вашему отзыву — это займёт минуту: ${url}`,
+      `Как вам у нас? Оцените визит одним нажатием: ${url}`,
     ].join('\n');
   }
   returnText(name: string | null) {
@@ -182,7 +184,8 @@ export class Growth {
         if (
           await send(a, 'reviewRequestedAt', wa.reviewTemplate, [
             a.guestName || 'уважаемый клиент',
-            settings.reviewUrl,
+            // «Как вам визит?» first: happy clients go on to the review page, unhappy ones to us.
+            await this.links.rateUrl(a.id),
           ])
         )
           reviews++;

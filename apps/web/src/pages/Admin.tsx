@@ -28,6 +28,15 @@ import { birthdayLabel, ClientCardDialog, ClientSummary } from '../clients';
 import { Photo, PhotoUpload, photoUrl, useGallery } from '../site';
 import { GiftCardsTab, ReviewsAdmin } from '../gifts';
 import { ExpensesPanel, ExportLinks, StockTab } from '../finance';
+import {
+  Rated,
+  RatingsList,
+  Referred,
+  ReferralForm,
+  ReferralsList,
+  SourcesStats,
+} from '../feedback';
+import { PromoKit } from '../promo';
 export const statusNames = {
   PENDING: 'Ждёт подтверждения',
   CONFIRMED: 'Подтверждена',
@@ -65,6 +74,7 @@ export function Admin({ config }: { config: Config }) {
           'Возврат клиентов',
           'WhatsApp',
           'Сайт',
+          'Продвижение',
           'Сертификаты',
           'Склад',
           'Услуги',
@@ -94,6 +104,8 @@ export function Admin({ config }: { config: Config }) {
         <Growth config={config} />
       ) : tab === 'Сайт' ? (
         <SiteTab />
+      ) : tab === 'Продвижение' ? (
+        <PromoKit config={config} />
       ) : tab === 'Склад' ? (
         <StockTab />
       ) : tab === 'Сертификаты' ? (
@@ -451,6 +463,9 @@ interface StatsData {
   expensesMinor: number;
   profitMinor: number;
   averageMinor: number;
+  sources: { source: string; visits: number }[];
+  ratingAvg: number | null;
+  ratings: number;
   cashMinor: number;
   kaspiMinor: number;
   unpaid: number;
@@ -566,6 +581,7 @@ function Statistics({ config }: { config: Config }) {
                 <small>Выручка − расходы</small>
               </div>
             </div>
+            <SourcesStats sources={s.sources} ratingAvg={s.ratingAvg} ratings={s.ratings} />
             <div className="stat-tiles two">
               <div className="stat-tile">
                 <span>Наличные</span>
@@ -883,6 +899,8 @@ interface GrowthData {
   birthdays: { phone: string; name: string; displayPhone: string; text: string }[];
   reviews: GrowthVisit[];
   returns: GrowthVisit[];
+  ratings: Rated[];
+  referrals: Referred[];
 }
 /** WhatsApp link with a ready text; opening it marks the visit so it leaves the list. */
 function SendWhatsApp({ v, mark, label }: { v: GrowthVisit; mark: string; label: string }) {
@@ -973,7 +991,7 @@ function Growth({ config }: { config: Config }) {
   });
   if (q.isPending) return <Loading />;
   if (q.error) return <ErrorBox error={q.error} retry={() => void q.refetch()} />;
-  const { settings, reviews, returns, birthdays } = q.data;
+  const { settings, reviews, returns, birthdays, ratings, referrals } = q.data;
   return (
     <>
       <div className="admin-toolbar">
@@ -1015,9 +1033,11 @@ function Growth({ config }: { config: Config }) {
           </div>
         </section>
       )}
+      <RatingsList items={ratings} config={config} />
+      <ReferralsList items={referrals} config={config} />
       <GrowthList
         title="Попросить отзыв"
-        caption="Визиты за последнюю неделю. Одного клиента просим не чаще раза в 3 месяца."
+        caption="Визиты за последнюю неделю. Клиент сначала ставит оценку: довольных сайт отправит в 2ГИС, недовольные напишут вам. Одного клиента просим не чаще раза в 3 месяца."
         empty="Сейчас некого просить об отзыве."
         items={reviews}
         mark="review-requested"
@@ -1090,6 +1110,7 @@ function Growth({ config }: { config: Config }) {
         </button>
       </form>
       <LoyaltyForm />
+      <ReferralForm />
     </>
   );
 }

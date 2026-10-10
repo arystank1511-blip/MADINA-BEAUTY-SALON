@@ -28,6 +28,7 @@ export function useOffers() {
       api<{
         loyalty: { every: number; reward: string } | null;
         birthdayDiscount: number | null;
+        referral: { reward: string } | null;
       }>('/offers'),
     staleTime: 5 * 60000,
   });

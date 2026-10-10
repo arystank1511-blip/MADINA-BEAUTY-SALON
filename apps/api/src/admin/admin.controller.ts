@@ -25,6 +25,7 @@ import {
   ClientsQuery,
   GrowthSettingsDto,
   LoyaltyDto,
+  ReferralDto,
   PaymentDto,
   StatsQuery,
   DayQuery,
@@ -402,6 +403,7 @@ export class AdminController {
       waitlist: await this.waitlist.list(date),
       loyalty: await this.loyalty.active(),
       visitNumbers: await this.loyalty.numbers(appointments),
+      referral: await this.loyalty.activeReferral(),
     };
   }
   @Staff()
@@ -555,12 +557,95 @@ export class AdminController {
         ...b,
         text: this.growth.birthdayText(b.name, settings.birthdayDiscount),
       })),
-      reviews: reviews.map((a) => ({
-        ...a,
-        text: this.growth.reviewText(a.guestName, settings.reviewUrl),
-      })),
+      reviews: await Promise.all(
+        reviews.map(async (a) => ({
+          ...a,
+          text: this.growth.reviewText(a.guestName, await this.links.rateUrl(a.id)),
+        })),
+      ),
       returns: returns.map((a) => ({ ...a, text: this.growth.returnText(a.guestName) })),
+      ratings: await this.db.appointment.findMany({
+        where: { ratedAt: { gte: new Date(+now - 60 * 86400000) } },
+        select: {
+          id: true,
+          guestName: true,
+          guestPhone: true,
+          serviceName: true,
+          startsAt: true,
+          rating: true,
+          feedback: true,
+          ratedAt: true,
+        },
+        orderBy: { ratedAt: 'desc' },
+        take: 50,
+      }),
+      referrals: await this.referrals(now),
     };
+  }
+  /** Visits by clients who came on someone's recommendation, with a thank-you text for them. */
+  private async referrals(now: Date) {
+    const { reward } = await this.loyalty.referral();
+    const visits = await this.db.appointment.findMany({
+      where: {
+        referrerPhone: { not: null },
+        status: { not: 'CANCELLED' },
+        startsAt: { gte: new Date(+now - 120 * 86400000) },
+      },
+      select: {
+        id: true,
+        guestName: true,
+        guestPhone: true,
+        startsAt: true,
+        status: true,
+        referrerPhone: true,
+        referralThankedAt: true,
+      },
+      orderBy: { startsAt: 'desc' },
+      take: 100,
+    });
+    // Names the salon already knows for the referrers' phones.
+    const keys = new Set(visits.map((v) => phoneKey(v.referrerPhone)));
+    const named = keys.size
+      ? await this.db.appointment.findMany({
+          where: { guestPhone: { not: null }, guestName: { not: null } },
+          select: { guestName: true, guestPhone: true },
+          orderBy: { createdAt: 'asc' },
+        })
+      : [];
+    // A family shares one phone: the first person who ever booked with it is its owner.
+    const names = new Map<string, string>();
+    for (const n of named) {
+      const k = phoneKey(n.guestPhone);
+      if (keys.has(k) && !names.has(k)) names.set(k, n.guestName!);
+    }
+    const nameOf = (phone: string) => names.get(phoneKey(phone)) ?? '';
+    return visits.map((v) => {
+      const referrerName = nameOf(v.referrerPhone!);
+      return {
+        ...v,
+        referrerName,
+        text: [
+          `Здравствуйте${referrerName ? ', ' + referrerName : ''}!`,
+          `Спасибо, что посоветовали нас${v.guestName ? ' ' + v.guestName : ''}!`,
+          `Ваш подарок: ${reward} на следующий визит. Записаться: ${config.siteUrl}/book`,
+        ].join('\n'),
+      };
+    });
+  }
+  @Patch('appointments/:id/referral-thanked')
+  @ApiOperation({ summary: 'Поблагодарили того, кто посоветовал салон' })
+  referralThanked(@Param('id', ParseUUIDPipe) id: string) {
+    return this.mark(id, { referralThankedAt: new Date() });
+  }
+  @Get('referral')
+  @ApiOperation({ summary: '«Приведи подругу»: настройки' })
+  referralSettings() {
+    return this.loyalty.referral();
+  }
+  @Put('referral')
+  @ApiOperation({ summary: '«Приведи подругу»: включить и задать подарок' })
+  referralSave(@Body() b: ReferralDto) {
+    return this.loyalty.saveReferral(b);
   }
   @Get('loyalty')
   @ApiOperation({ summary: 'Бонусы: каждый N-й визит — подарок' })

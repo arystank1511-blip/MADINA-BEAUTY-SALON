@@ -84,6 +84,23 @@ export class Stats {
       .map((r) => ({ category: r.category, amountMinor: r._sum.amountMinor ?? 0 }))
       .sort((a, b) => b.amountMinor - a.amountMinor);
     const expensesMinor = expenseCategories.reduce((sum, c) => sum + c.amountMinor, 0);
+    // Where clients of this period heard about the salon, and how they rated their visits.
+    const [sources, rated] = await Promise.all([
+      this.db.appointment.groupBy({
+        by: ['source'],
+        where: {
+          startsAt: { gte: start, lt: end },
+          source: { not: null },
+          status: { not: 'CANCELLED' },
+        },
+        _count: { _all: true },
+      }),
+      this.db.appointment.aggregate({
+        where: { startsAt: { gte: start, lt: end }, rating: { not: null } },
+        _avg: { rating: true },
+        _count: { rating: true },
+      }),
+    ]);
     return {
       from: from.toString(),
       to: to.toString(),
@@ -95,6 +112,11 @@ export class Stats {
       expensesMinor,
       profitMinor: revenueMinor - expensesMinor,
       expenseCategories,
+      sources: sources
+        .map((s) => ({ source: s.source!, visits: s._count._all }))
+        .sort((a, b) => b.visits - a.visits),
+      ratingAvg: rated._avg.rating === null ? null : Math.round(rated._avg.rating * 10) / 10,
+      ratings: rated._count.rating,
       // Whole tenge: the average check is a rough figure, not an amount to pay.
       averageMinor: done.length ? Math.round(revenueMinor / done.length / 100) * 100 : 0,
       cashMinor: cash,

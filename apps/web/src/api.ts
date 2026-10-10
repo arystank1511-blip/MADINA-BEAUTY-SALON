@@ -60,6 +60,8 @@ export interface Appointment {
   customer: User | null;
   /** Client's personal link to move or cancel the visit (staff lists only). */
   manageUrl?: string;
+  referrerPhone?: string | null;
+  source?: string | null;
 }
 /** Display name of whoever the visit is for: account holder or a guest named by the master. */
 export const clientName = (a: Pick<Appointment, 'customer' | 'guestName'>) =>

@@ -43,6 +43,23 @@ export class BookingDto {
   @Matches(offset)
   startsAt!: string;
 }
+export const SOURCES = ['instagram', '2gis', 'maps', 'friends', 'passing', 'other'] as const;
+export const SOURCE_NAMES: Record<(typeof SOURCES)[number], string> = {
+  instagram: 'Instagram',
+  '2gis': '2ГИС',
+  maps: 'Google или Яндекс Карты',
+  friends: 'друзья, родные',
+  passing: 'проходили мимо',
+  other: 'другое',
+};
+export class FamilyMemberDto {
+  @ApiProperty({ example: 'Алихан' })
+  @Transform(({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value))
+  @IsString()
+  @Length(2, 80)
+  name!: string;
+  @ApiProperty() @IsUUID() serviceId!: string;
+}
 export class BookingRequestDto {
   @ApiProperty() @IsUUID() serviceId!: string;
   @ApiProperty() @IsUUID() masterId!: string;
@@ -68,6 +85,26 @@ export class BookingRequestDto {
   @IsOptional()
   @Matches(/^(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/, { message: 'День рождения в виде ММ-ДД.' })
   birthday?: string;
+  @ApiProperty({ required: false, enum: SOURCES, description: 'Откуда узнали о салоне' })
+  @IsOptional()
+  @IsIn(SOURCES)
+  source?: (typeof SOURCES)[number];
+  @ApiProperty({ required: false, description: 'Телефон того, кто посоветовал салон' })
+  @IsOptional()
+  @IsString()
+  @Matches(/^[+\d\s()-]{0,30}$/, { message: 'Укажите телефон, например +7 777 123 45 67.' })
+  referrerPhone?: string;
+  @ApiProperty({
+    required: false,
+    type: () => [FamilyMemberDto],
+    description: 'Записать вместе: следующие визиты подряд, тем же телефоном',
+  })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(3)
+  @ValidateNested({ each: true })
+  @Type(() => FamilyMemberDto)
+  family?: FamilyMemberDto[];
 }
 const trim = ({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value);
 export class QuickBookingDto extends BookingDto {
@@ -380,6 +417,28 @@ export class StockDto {
   @Min(-1000000)
   @Max(1000000)
   delta!: number;
+}
+export class RateDto {
+  @ApiProperty({ minimum: 1, maximum: 5 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(5)
+  rating!: number;
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @Transform(({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value))
+  @IsString()
+  @Length(0, 1000)
+  feedback?: string;
+}
+export class ReferralDto {
+  @ApiProperty() @IsBoolean() enabled!: boolean;
+  @ApiProperty({ example: 'скидка 10%' })
+  @Transform(({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value))
+  @IsString()
+  @Length(2, 60)
+  reward!: string;
 }
 export class PaymentDto {
   @ApiProperty({ description: 'Фактически оплачено, в минимальных единицах (тиын)' })
