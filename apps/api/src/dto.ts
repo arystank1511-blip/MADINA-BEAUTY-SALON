@@ -330,6 +330,57 @@ export class GiftCardDto {
 export class RedeemDto {
   @ApiProperty() @IsBoolean() redeemed!: boolean;
 }
+export class ExpenseDto {
+  @ApiProperty({ example: '2026-10-10' })
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  date!: string;
+  @ApiProperty({ example: 'Материалы' })
+  @IsIn(['Материалы', 'Аренда', 'Коммунальные', 'Зарплата', 'Реклама', 'Другое'])
+  category!: string;
+  @ApiProperty({ description: 'Сумма в тиынах (×100)' })
+  @IsInt()
+  @Min(1)
+  @Max(1000000000)
+  amountMinor!: number;
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @Transform(({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value))
+  @IsString()
+  @Length(0, 200)
+  note?: string;
+}
+export class MaterialDto {
+  @ApiProperty({ example: 'Краска Estel 7/1' })
+  @Transform(({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value))
+  @IsString()
+  @Length(2, 80)
+  name!: string;
+  @ApiProperty({ example: 'шт' })
+  @Transform(({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value))
+  @IsString()
+  @Length(1, 12)
+  unit!: string;
+  @ApiProperty()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(1000000)
+  quantity!: number;
+  @ApiProperty({ description: 'Предупредить, когда останется столько или меньше' })
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(1000000)
+  minQuantity!: number;
+}
+export class StockDto {
+  @ApiProperty({ description: 'Приход (+) или расход (−)', example: -1 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(-1000000)
+  @Max(1000000)
+  delta!: number;
+}
 export class PaymentDto {
   @ApiProperty({ description: 'Фактически оплачено, в минимальных единицах (тиын)' })
   @IsInt()

@@ -227,3 +227,25 @@ model GiftCard {
   redeemedAt DateTime? @db.Timestamptz(3)
   @@index([createdAt])
 }
+/// Money spent by the salon: rent, materials, salary…; profit = revenue − expenses.
+model Expense {
+  id String @id @default(uuid()) @db.Uuid
+  /// Salon date, YYYY-MM-DD.
+  date String
+  category String
+  amountMinor Int
+  note String @default("")
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  @@index([date])
+}
+/// Salon supplies (dye, shampoo, gloves) with a low-stock threshold.
+model Material {
+  id String @id @default(uuid()) @db.Uuid
+  name String @unique
+  unit String
+  quantity Int
+  minQuantity Int
+  /// Set when the low-stock alert went out; cleared once restocked above the minimum.
+  lowAlertedAt DateTime? @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+}

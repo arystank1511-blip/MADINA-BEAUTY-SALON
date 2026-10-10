@@ -3647,3 +3647,58 @@ tr.clickable:hover td {
   display: flex;
   gap: 3px;
 }
+.stat-tile strong.negative {
+  color: var(--error);
+}
+.expense-form {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) auto;
+  gap: 12px;
+  align-items: end;
+  margin: 16px 0;
+}
+.expense-totals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  color: var(--muted);
+}
+.expense-totals strong {
+  color: var(--text);
+}
+.export-links {
+  flex-wrap: wrap;
+}
+.stock-low {
+  padding: 14px 18px;
+  border: 1px solid var(--accent);
+  background: var(--tint);
+}
+tr.low strong {
+  color: var(--error);
+}
+.stock-buttons {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.stock-buttons .button {
+  min-width: 52px;
+}
+@media (max-width: 900px) {
+  .expense-form {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+@media (max-width: 500px) {
+  .expense-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+table.compact {
+  min-width: 0;
+}
+table.compact td,
+table.compact th {
+  padding-inline: 10px;
+}

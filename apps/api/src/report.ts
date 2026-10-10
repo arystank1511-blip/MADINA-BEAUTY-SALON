@@ -6,6 +6,7 @@ import { config } from './config';
 import { Telegram } from './telegram';
 import { Push } from './push';
 import { Stats } from './stats';
+import { Money } from './money';
 import { activeAt } from './booking/booking.service';
 import { salonDate, startOfDay } from './availability/rules';
 
@@ -45,6 +46,7 @@ export class WeeklyReport {
     private telegram: Telegram,
     private push: Push,
     private stats: Stats,
+    private money: Money,
   ) {}
   /** The report for the full week (Monday–Sunday) before the one containing `now`. */
   async build(now = new Date()) {
@@ -52,7 +54,7 @@ export class WeeklyReport {
     const monday = today.subtract({ days: today.dayOfWeek - 1 });
     const from = monday.subtract({ days: 7 }),
       to = monday.subtract({ days: 1 });
-    const [week, before, booked] = await Promise.all([
+    const [week, before, booked, low] = await Promise.all([
       this.stats.period(from.toString(), to.toString(), now),
       this.stats.period(
         from.subtract({ days: 7 }).toString(),
@@ -69,11 +71,15 @@ export class WeeklyReport {
           },
         },
       }),
+      this.money.low(),
     ]);
     const top = week.services.slice(0, 3).map((s) => `${s.name} (${s.visits})`);
     const lines = [
       `Итоги недели ${span(from, to)} · ${config.name}`,
       `Выручка: ${tenge(week.revenueMinor)}${change(week.revenueMinor, before.revenueMinor)}`,
+      ...(week.expensesMinor
+        ? [`Расходы: ${tenge(week.expensesMinor)} · прибыль: ${tenge(week.profitMinor)}`]
+        : []),
       `Визитов: ${week.completed}${before.completed ? ` (неделей раньше ${before.completed})` : ''}` +
         (week.completed ? ` · средний чек ${tenge(week.averageMinor)}` : ''),
       `Клиентов: ${week.clients}, из них новых: ${week.newClients}`,
@@ -85,6 +91,9 @@ export class WeeklyReport {
         ? [`Наличные ${tenge(week.cashMinor)} · Kaspi ${tenge(week.kaspiMinor)}`]
         : []),
       ...(week.unpaid ? [`Без отметки оплаты: ${week.unpaid} — отметьте в «Мой день».`] : []),
+      ...(low.length
+        ? [`Заканчивается: ${low.map((m) => `${m.name} (${m.quantity} ${m.unit})`).join(', ')}`]
+        : []),
       `На эту неделю уже записано: ${booked}`,
     ];
     return {

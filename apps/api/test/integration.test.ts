@@ -1655,6 +1655,143 @@ describe.sequential('real PostgreSQL, HTTP and independent Nest instances', () =
       ),
     ).toBe(false);
   });
+  it('expenses give profit; low stock alerts once; Excel export is owner-only and formula-safe', async () => {
+    process.env.PUSH_DRY_RUN = '1';
+    const endpoint = `https://push.example.com/${randomUUID()}`;
+    // A day far in the past keeps these numbers apart from other tests.
+    const day = '2025-02-' + String(1 + Math.floor(Math.random() * 27)).padStart(2, '0');
+    const name = `Краска ${randomUUID().slice(0, 6)}`;
+    try {
+      const expense = {
+        date: day,
+        category: 'Материалы',
+        amountMinor: 1250000,
+        note: '=HYPERLINK("x")',
+      };
+      expect((await call('/admin/expenses', 'POST', expense, c1)).status).toBe(403);
+      for (const bad of [{ category: 'Еда' }, { amountMinor: 0 }, { date: '2025-2-1' }])
+        expect((await call('/admin/expenses', 'POST', { ...expense, ...bad }, admin)).status).toBe(
+          400,
+        );
+      const added = await call('/admin/expenses', 'POST', expense, admin);
+      expect(added.status).toBe(201);
+      await call(
+        '/admin/expenses',
+        'POST',
+        { ...expense, category: 'Аренда', amountMinor: 5000000 },
+        admin,
+      );
+      const visitAt = localInstant(day, '12:00', 'Asia/Almaty');
+      const visit = await db.appointment.create({
+        data: {
+          guestName: 'Расчёт',
+          guestPhone: '+7 707 000 11 22',
+          masterId: master2,
+          serviceId: service,
+          startsAt: visitAt,
+          endsAt: new Date(+visitAt + 30 * 60000),
+          occupiedUntil: new Date(+visitAt + 30 * 60000),
+          serviceName: 'Тест',
+          priceMinor: 400000,
+          paidMinor: 450000,
+          paymentMethod: 'KASPI',
+          durationMinutes: 30,
+          bufferAfterMinutes: 0,
+          status: 'COMPLETED',
+        },
+      });
+      const stats = (await call(`/admin/stats?from=${day}&to=${day}`, 'GET', undefined, admin))
+        .body as unknown as Record<string, unknown>;
+      expect(stats).toMatchObject({
+        revenueMinor: 450000,
+        expensesMinor: 6250000,
+        profitMinor: 450000 - 6250000,
+        expenseCategories: [
+          { category: 'Аренда', amountMinor: 5000000 },
+          { category: 'Материалы', amountMinor: 1250000 },
+        ],
+      });
+
+      // Excel export: owner only; Excel-friendly; no formulas from user text.
+      const download = (kind: string, cookie: string) =>
+        fetch(`${urls[0]}/api/v1/admin/export/${kind}?from=${day}&to=${day}`, {
+          headers: { cookie },
+        });
+      expect((await download('visits', c1)).status).toBe(403);
+      expect((await download('nonsense', admin)).status).toBe(404);
+      const visits = await download('visits', admin);
+      expect(visits.headers.get('content-type')).toMatch(/^text\/csv/);
+      expect(visits.headers.get('content-disposition')).toContain(
+        `madina_visits_${day}_${day}.csv`,
+      );
+      const text = new TextDecoder('utf-8', { ignoreBOM: true }).decode(await visits.arrayBuffer());
+      expect(text.startsWith('\uFEFFДата;Время;Клиент;Телефон')).toBe(true);
+      expect(text).toContain(
+        `${day};12:00;Расчёт;8 707 000 11 22;Тест;Тестовый мастер;Состоялась;4000;4500;Kaspi`,
+      );
+      const costs = await (await download('expenses', admin)).text();
+      expect(costs).toContain(`${day};Материалы;12500;"'=HYPERLINK(""x"")"`);
+      expect((await download('clients', admin)).status).toBe(200);
+
+      // Stock: one alert when it first drops to the minimum, again only after restocking.
+      expect(
+        (
+          await call(
+            '/push/subscribe',
+            'POST',
+            { endpoint, keys: { p256dh: 'BOr'.padEnd(87, 'w'), auth: 'auth-secret-4' } },
+            admin,
+          )
+        ).status,
+      ).toBe(201);
+      const { Push } = loadCompiled('../dist/src/push.js') as {
+        Push: new (...args: never[]) => {
+          sent: { endpoint: string; message: { title: string; body: string } }[];
+        };
+      };
+      const alerts = () =>
+        apps[0]
+          .get(Push)
+          .sent.filter((s) => s.endpoint === endpoint && s.message.body.startsWith(name)).length;
+      const material = { name, unit: 'шт', quantity: 4, minQuantity: 2 };
+      expect((await call('/admin/materials', 'POST', material, c1)).status).toBe(403);
+      expect(
+        (await call('/admin/materials', 'POST', { ...material, quantity: -1 }, admin)).status,
+      ).toBe(400);
+      const created = await call('/admin/materials', 'POST', material, admin);
+      expect(created.status).toBe(201);
+      expect((await call('/admin/materials', 'POST', material, admin)).status).toBe(409);
+      const stock = (delta: number) =>
+        call(`/admin/materials/${created.body.id}/stock`, 'POST', { delta }, admin);
+      expect(((await stock(-1)).body as unknown as { quantity: number }).quantity).toBe(3);
+      expect(alerts()).toBe(0);
+      await stock(-1);
+      expect(alerts()).toBe(1);
+      expect(((await stock(-5)).body as unknown as { quantity: number }).quantity).toBe(0);
+      expect(alerts()).toBe(1);
+      await stock(10);
+      await stock(-8);
+      expect(alerts()).toBe(2);
+      expect(
+        (await call(`/admin/materials/${randomUUID()}/stock`, 'POST', { delta: 1 }, admin)).status,
+      ).toBe(404);
+
+      // The Monday report lists what is running out.
+      const report = (await call('/admin/weekly-report', 'GET', undefined, admin))
+        .body as unknown as {
+        lines: string[];
+      };
+      expect(
+        report.lines.some((l) => l.startsWith('Заканчивается: ') && l.includes(`${name} (2 шт)`)),
+      ).toBe(true);
+      await db.appointment.delete({ where: { id: visit.id } });
+    } finally {
+      delete process.env.PUSH_DRY_RUN;
+      await db.pushSubscription.deleteMany({ where: { endpoint } });
+      await db.material.deleteMany({ where: { name } });
+      await db.expense.deleteMany({ where: { date: day } });
+    }
+  });
   it('rate limits abusive client without blocking another behind the trusted proxy', async () => {
     const attempt = async (ip: string) =>
       fetch(urls[0] + '/api/v1/auth/login', {

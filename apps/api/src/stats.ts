@@ -75,6 +75,15 @@ export class Stats {
       : [];
     const returning = new Set(earlier.map((e) => key(e.guestPhone)));
     const revenueMinor = done.reduce((sum, v) => sum + amount(v), 0);
+    const spent = await this.db.expense.groupBy({
+      by: ['category'],
+      where: { date: { gte: from.toString(), lte: to.toString() } },
+      _sum: { amountMinor: true },
+    });
+    const expenseCategories = spent
+      .map((r) => ({ category: r.category, amountMinor: r._sum.amountMinor ?? 0 }))
+      .sort((a, b) => b.amountMinor - a.amountMinor);
+    const expensesMinor = expenseCategories.reduce((sum, c) => sum + c.amountMinor, 0);
     return {
       from: from.toString(),
       to: to.toString(),
@@ -83,6 +92,9 @@ export class Stats {
       cancelled: visits.filter((v) => v.status === 'CANCELLED').length,
       noShowRate: done.length + noShows ? noShows / (done.length + noShows) : 0,
       revenueMinor,
+      expensesMinor,
+      profitMinor: revenueMinor - expensesMinor,
+      expenseCategories,
       // Whole tenge: the average check is a rough figure, not an amount to pay.
       averageMinor: done.length ? Math.round(revenueMinor / done.length / 100) * 100 : 0,
       cashMinor: cash,

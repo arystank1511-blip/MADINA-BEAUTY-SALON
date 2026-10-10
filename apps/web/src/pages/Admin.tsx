@@ -27,6 +27,7 @@ import { methodNames, Paid, PaymentDialog } from '../payment';
 import { birthdayLabel, ClientCardDialog, ClientSummary } from '../clients';
 import { Photo, PhotoUpload, photoUrl, useGallery } from '../site';
 import { GiftCardsTab, ReviewsAdmin } from '../gifts';
+import { ExpensesPanel, ExportLinks, StockTab } from '../finance';
 export const statusNames = {
   PENDING: 'Ждёт подтверждения',
   CONFIRMED: 'Подтверждена',
@@ -65,6 +66,7 @@ export function Admin({ config }: { config: Config }) {
           'WhatsApp',
           'Сайт',
           'Сертификаты',
+          'Склад',
           'Услуги',
           'Мастера',
           'Расписание',
@@ -92,6 +94,8 @@ export function Admin({ config }: { config: Config }) {
         <Growth config={config} />
       ) : tab === 'Сайт' ? (
         <SiteTab />
+      ) : tab === 'Склад' ? (
+        <StockTab />
       ) : tab === 'Сертификаты' ? (
         <GiftCardsTab config={config} />
       ) : tab === 'WhatsApp' ? (
@@ -444,6 +448,8 @@ interface StatsData {
   cancelled: number;
   noShowRate: number;
   revenueMinor: number;
+  expensesMinor: number;
+  profitMinor: number;
   averageMinor: number;
   cashMinor: number;
   kaspiMinor: number;
@@ -551,6 +557,17 @@ function Statistics({ config }: { config: Config }) {
             </div>
             <div className="stat-tiles two">
               <div className="stat-tile">
+                <span>Расходы</span>
+                <strong>{m(s.expensesMinor)}</strong>
+              </div>
+              <div className="stat-tile">
+                <span>Прибыль</span>
+                <strong className={s.profitMinor < 0 ? 'negative' : ''}>{m(s.profitMinor)}</strong>
+                <small>Выручка − расходы</small>
+              </div>
+            </div>
+            <div className="stat-tiles two">
+              <div className="stat-tile">
                 <span>Наличные</span>
                 <strong>{m(s.cashMinor)}</strong>
               </div>
@@ -610,6 +627,8 @@ function Statistics({ config }: { config: Config }) {
           </>
         )
       )}
+      <ExpensesPanel from={range.from} to={range.to} config={config} />
+      <ExportLinks from={range.from} to={range.to} />
     </>
   );
 }
