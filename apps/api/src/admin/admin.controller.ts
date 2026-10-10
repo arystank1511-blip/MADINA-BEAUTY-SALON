@@ -27,6 +27,8 @@ import {
   ServicePatch,
   ServicesDto,
   TimeOffDto,
+  WhatsAppSettingsDto,
+  WhatsAppTestDto,
   WindowDto,
 } from '../dto';
 import { activeAt, appointmentInclude, BookingService, Tx } from '../booking/booking.service';
@@ -34,7 +36,8 @@ import { config } from '../config';
 import { fail } from '../errors';
 import { fitsSchedule, localInstant, salonDate, startOfDay } from '../availability/rules';
 import { Temporal } from '@js-temporal/polyfill';
-import { Reminders } from '../reminders';
+import { intlPhone, reminderParams, Reminders } from '../reminders';
+import { WhatsApp } from '../whatsapp';
 /** Comparable phone key: the last 10 digits, so +7 777…, 8 777… and 777… match. */
 export const phoneKey = (phone: string | null | undefined) => {
   const digits = (phone || '').replace(/\D/g, '');
@@ -50,6 +53,7 @@ export class AdminController {
     private db: Db,
     private booking: BookingService,
     private reminders: Reminders,
+    private whatsapp: WhatsApp,
   ) {}
   private async schedule<T>(id: string, mutate: (tx: Tx) => Promise<T>) {
     return this.db.$transaction(
@@ -391,6 +395,43 @@ export class AdminController {
       include: appointmentInclude,
       orderBy: { startsAt: 'asc' },
     });
+  }
+  @Get('whatsapp')
+  @ApiOperation({ summary: 'Настройки WhatsApp Business API (токен не возвращается)' })
+  whatsappSettings() {
+    return this.whatsapp.publicSettings();
+  }
+  @Put('whatsapp')
+  @ApiOperation({ summary: 'Сохранить настройки WhatsApp Business API; пустой токен — не менять' })
+  async whatsappSave(@Body() b: WhatsAppSettingsDto) {
+    const { accessToken, ...rest } = b;
+    const token = accessToken?.trim();
+    const next = { ...rest, ...(token ? { accessToken: token } : {}) };
+    if (next.enabled) {
+      const current = await this.whatsapp.settings();
+      if (!next.phoneNumberId || !next.templateName || !(token || current.accessToken))
+        fail(
+          400,
+          'WHATSAPP_INCOMPLETE',
+          'Чтобы включить автоматические сообщения, заполните Phone number ID, токен и шаблон.',
+        );
+    }
+    return this.whatsapp.save(next);
+  }
+  @Post('whatsapp/test')
+  @ApiOperation({ summary: 'Отправить пробное напоминание на указанный номер' })
+  async whatsappTest(@Body() b: WhatsAppTestDto) {
+    const s = await this.whatsapp.settings();
+    if (!s.phoneNumberId || !s.accessToken || !s.templateName)
+      fail(400, 'WHATSAPP_INCOMPLETE', 'Сначала сохраните Phone number ID, токен и шаблон.');
+    const to = intlPhone(b.phone);
+    if (!to) fail(400, 'INVALID_PHONE', 'Введите номер полностью, например +7 777 123 45 67.');
+    const startsAt = new Date(Date.now() + 3600000);
+    return this.whatsapp.send(
+      s,
+      to,
+      reminderParams({ guestName: 'Тест', startsAt, serviceName: 'Пробное сообщение' }),
+    );
   }
   @Patch('appointments/:id/reminded')
   @ApiOperation({ summary: 'Отметить, что клиенту отправлено напоминание в WhatsApp' })

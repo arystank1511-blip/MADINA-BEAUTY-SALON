@@ -5,6 +5,7 @@ import { config } from './config';
 import { fail } from './errors';
 import { Telegram } from './telegram';
 import { activeAt } from './booking/booking.service';
+import { WhatsApp } from './whatsapp';
 
 /** How long before a visit the salon gets its heads-up. */
 export const REMIND_MINUTES = 60;
@@ -24,21 +25,77 @@ const clock = (date: Date) =>
     minute: '2-digit',
   }).format(date);
 
-/** Sends the salon one Telegram message per visit starting within the next hour. */
+/** Template variables of the reminder: {{1}} name, {{2}} when, {{3}} service. */
+export const reminderParams = (a: {
+  guestName: string | null;
+  startsAt: Date;
+  serviceName: string;
+}) => [a.guestName || 'уважаемый клиент', `сегодня в ${clock(a.startsAt)}`, a.serviceName];
+
+/**
+ * For each visit starting within the next hour: an automatic WhatsApp reminder to the client
+ * (when the WhatsApp Business API is set up in the admin) and one Telegram heads-up to the salon.
+ */
 @Injectable()
 export class Reminders {
   constructor(
     private db: Db,
     private telegram: Telegram,
+    private whatsapp: WhatsApp,
   ) {}
+  private window(now: Date) {
+    return { gt: now, lte: new Date(+now + REMIND_MINUTES * 60000) };
+  }
   async run(now = new Date()) {
-    if (!this.telegram.enabled) return { sent: 0 };
+    const whatsapp = await this.remindClients(now);
+    const sent = await this.alertSalon(now);
+    return { sent, whatsapp };
+  }
+  /** WhatsApp Business API: the client gets the approved reminder template, once per visit. */
+  private async remindClients(now: Date) {
+    const settings = await this.whatsapp.active();
+    if (!settings) return 0;
+    const due = await this.db.appointment.findMany({
+      where: {
+        ...activeAt(now),
+        status: 'CONFIRMED',
+        waSentAt: null,
+        guestPhone: { not: null },
+        startsAt: this.window(now),
+      },
+      orderBy: { startsAt: 'asc' },
+    });
+    let sent = 0;
+    for (const a of due) {
+      const phone = intlPhone(a.guestPhone);
+      if (!phone) continue;
+      // Claim first, so overlapping runs never message the client twice.
+      const claimed = await this.db.appointment.updateMany({
+        where: { id: a.id, waSentAt: null },
+        data: { waSentAt: now },
+      });
+      if (!claimed.count) continue;
+      const result = await this.whatsapp.send(settings, phone, reminderParams(a));
+      await this.db.appointment.update({
+        where: { id: a.id },
+        // On failure the claim is released and the next run tries again; the error is shown.
+        data: result.ok
+          ? { remindedAt: now, waError: null }
+          : { waSentAt: null, waError: result.error },
+      });
+      if (result.ok) sent++;
+    }
+    return sent;
+  }
+  /** Telegram: the salon gets one heads-up per visit, with a WhatsApp link if needed. */
+  private async alertSalon(now: Date) {
+    if (!this.telegram.enabled) return 0;
     const due = await this.db.appointment.findMany({
       where: {
         ...activeAt(now),
         status: { in: ['CONFIRMED', 'PENDING'] },
         alertedAt: null,
-        startsAt: { gt: now, lte: new Date(+now + REMIND_MINUTES * 60000) },
+        startsAt: this.window(now),
       },
       include: { customer: { select: { name: true } }, master: { select: { name: true } } },
       orderBy: { startsAt: 'asc' },
@@ -60,6 +117,7 @@ export class Reminders {
         `Салон «${config.name}», ${config.address}.`,
         'Если планы изменятся, напишите, пожалуйста. Спасибо!',
       ].join('\n');
+      const auto = !!a.waSentAt;
       const ok = await this.telegram.notify(
         [
           `Через ${minutes} мин: ${clock(a.startsAt)} · ${config.name}`,
@@ -68,8 +126,10 @@ export class Reminders {
           `Услуга: ${a.serviceName}`,
           `Мастер: ${a.master.name}`,
           ...(a.status === 'PENDING' ? ['Заявка ещё не подтверждена!'] : []),
+          ...(auto ? ['Клиенту автоматически отправлено напоминание в WhatsApp.'] : []),
+          ...(a.waError && !auto ? [`WhatsApp API не отправил напоминание: ${a.waError}`] : []),
         ],
-        phone
+        phone && !auto
           ? [
               {
                 text: 'Напомнить клиенту в WhatsApp',
@@ -82,7 +142,7 @@ export class Reminders {
       if (!ok) await this.db.appointment.update({ where: { id: a.id }, data: { alertedAt: null } });
       else sent++;
     }
-    return { sent };
+    return sent;
   }
 }
 

@@ -126,6 +126,10 @@ model Appointment {
   alertedAt DateTime? @db.Timestamptz(3)
   /// When the client was last sent a WhatsApp reminder from the admin or «Мой день».
   remindedAt DateTime? @db.Timestamptz(3)
+  /// When the automatic WhatsApp reminder went out through the WhatsApp Business API.
+  waSentAt DateTime? @db.Timestamptz(3)
+  /// Why the last automatic WhatsApp reminder failed, as reported by Meta.
+  waError String?
   customer User? @relation("Customer",fields:[customerId],references:[id],onDelete:Restrict)
   cancelledBy User? @relation("Canceller",fields:[cancelledById],references:[id])
   master Master @relation(fields:[masterId],references:[id])
@@ -133,4 +137,10 @@ model Appointment {
   @@index([customerId,startsAt])
   @@index([masterId,startsAt])
   @@index([status,startsAt])
+}
+/// Salon settings edited in the admin, one JSON document per key (e.g. "whatsapp").
+model Setting {
+  key String @id
+  value Json
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
 }
