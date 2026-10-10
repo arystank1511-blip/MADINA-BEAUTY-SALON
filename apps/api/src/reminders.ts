@@ -8,6 +8,7 @@ import { activeAt } from './booking/booking.service';
 import { WhatsApp } from './whatsapp';
 import { Growth } from './growth';
 import { Clients } from './clients';
+import { Push } from './push';
 import { salonDate, startOfDay } from './availability/rules';
 import { Prisma } from '@prisma/client';
 
@@ -50,6 +51,7 @@ export class Reminders {
     private whatsapp: WhatsApp,
     private growth: Growth,
     private clients: Clients,
+    private push: Push,
   ) {}
   private window(now: Date) {
     return { gt: now, lte: new Date(+now + REMIND_MINUTES * 60000) };
@@ -76,7 +78,8 @@ export class Reminders {
   }
   /** From 09:00 salon time, once a day: today's visits in Telegram. */
   private async morningSummary(now: Date) {
-    if (!this.telegram.enabled || clock(now) < SUMMARY_AT) return false;
+    if (clock(now) < SUMMARY_AT) return false;
+    if (!this.telegram.enabled && !(await this.push.subscribers())) return false;
     const date = salonDate(now, config.timezone);
     const key = `summary:${date}`;
     try {
@@ -104,7 +107,16 @@ export class Reminders {
     }).format(now);
     const pending = today.filter((a) => a.status === 'PENDING').length;
     const birthdays = await this.clients.birthdaysToday(now);
-    const ok = await this.telegram.notify([
+    const pushed = await this.push.notifyStaff({
+      title: today.length ? `Сегодня записей: ${today.length}` : 'Сегодня записей пока нет',
+      body:
+        today
+          .slice(0, 4)
+          .map((a) => `${clock(a.startsAt)} ${a.customer?.name || a.guestName || 'Клиент'}`)
+          .join(', ') + (today.length > 4 ? '…' : ''),
+      tag: `summary-${date}`,
+    });
+    const telegram = await this.telegram.notify([
       `Доброе утро! Сегодня, ${day} · ${config.name}`,
       today.length ? `Записей: ${today.length}` : 'Записей на сегодня пока нет.',
       ...today.map(
@@ -120,7 +132,8 @@ export class Reminders {
           ]
         : []),
     ]);
-    // Telegram was down: release the claim so a later run sends the summary.
+    const ok = telegram || pushed > 0;
+    // Nothing was delivered: release the claim so a later run sends the summary.
     if (!ok) await this.db.setting.delete({ where: { key } });
     return ok;
   }
@@ -162,7 +175,7 @@ export class Reminders {
   }
   /** Telegram: the salon gets one heads-up per visit, with a WhatsApp link if needed. */
   private async alertSalon(now: Date) {
-    if (!this.telegram.enabled) return 0;
+    if (!this.telegram.enabled && !(await this.push.subscribers())) return 0;
     const due = await this.db.appointment.findMany({
       where: {
         ...activeAt(now),
@@ -191,7 +204,15 @@ export class Reminders {
         'Если планы изменятся, напишите, пожалуйста. Спасибо!',
       ].join('\n');
       const auto = !!a.waSentAt;
-      const ok = await this.telegram.notify(
+      const pushed = await this.push.notifyStaff({
+        title: `Через ${minutes} мин: ${clock(a.startsAt)} — ${name}`,
+        body:
+          `${a.serviceName}` +
+          (a.status === 'PENDING' ? ' · заявка ещё не подтверждена!' : '') +
+          (auto ? ' · клиенту напомнили в WhatsApp' : ''),
+        tag: `soon-${a.id}`,
+      });
+      const telegram = await this.telegram.notify(
         [
           `Через ${minutes} мин: ${clock(a.startsAt)} · ${config.name}`,
           `Клиент: ${name}`,
@@ -211,7 +232,8 @@ export class Reminders {
             ]
           : [],
       );
-      // Telegram was down: release the claim so the next run tries again.
+      const ok = telegram || pushed > 0;
+      // Nothing was delivered: release the claim so the next run tries again.
       if (!ok) await this.db.appointment.update({ where: { id: a.id }, data: { alertedAt: null } });
       else sent++;
     }

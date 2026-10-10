@@ -97,7 +97,10 @@ export function Admin({ config }: { config: Config }) {
       ) : tab === 'Мастера' ? (
         <Masters />
       ) : tab === 'Пароль' ? (
-        <Password />
+        <>
+          <Password />
+          <MasterLogin />
+        </>
       ) : (
         <Schedule config={config} />
       )}
@@ -1468,6 +1471,91 @@ function Services({ config }: { config: Config }) {
           </form>
         </Modal>
       )}
+    </>
+  );
+}
+/** A separate login for the master: «Мой день» only, no prices, settings or statistics. */
+function MasterLogin() {
+  const client = useQueryClient();
+  const [done, setDone] = useState(false);
+  const q = useQuery({
+    queryKey: ['master-login'],
+    queryFn: () => api<{ email: string | null }>('/admin/master-login'),
+  });
+  const save = useMutation({
+    mutationFn: (body: { email: string; password: string }) =>
+      send('/admin/master-login', 'PUT', body),
+    onSuccess: () => {
+      setDone(true);
+      void client.invalidateQueries({ queryKey: ['master-login'] });
+    },
+  });
+  return (
+    <>
+      <div className="admin-toolbar">
+        <div>
+          <h2>Вход для мастера</h2>
+          <p className="caption">
+            Отдельный логин для Нургуль: она видит только «Мой день» — записи, заявки, оплату,
+            заметки и фото работ. Цены, статистика, клиенты и настройки ей недоступны. После смены
+            пароля мастер выходит на всех устройствах.
+          </p>
+        </div>
+      </div>
+      <form
+        className="panel password-form"
+        onSubmit={(e) => {
+          const form = e.currentTarget;
+          const f = fd(e);
+          setDone(false);
+          save.mutate(
+            { email: String(f.get('email')).trim(), password: String(f.get('password')) },
+            {
+              onSuccess: () =>
+                ((form.elements.namedItem('password') as HTMLInputElement).value = ''),
+            },
+          );
+        }}
+        key={q.data?.email ?? 'new'}
+      >
+        {q.data?.email && (
+          <p className="caption">
+            Сейчас: <strong>{q.data.email}</strong>
+          </p>
+        )}
+        <label>
+          Email для входа
+          <input
+            type="email"
+            name="email"
+            required
+            autoComplete="off"
+            placeholder="nurgul@madina.kz"
+            defaultValue={q.data?.email ?? ''}
+          />
+        </label>
+        <label>
+          Новый пароль
+          <input
+            type="password"
+            name="password"
+            required
+            minLength={10}
+            maxLength={128}
+            autoComplete="new-password"
+          />
+        </label>
+        {save.error && <ErrorBox error={save.error} />}
+        {done && (
+          <p role="status" className="price-saved">
+            Готово. Нургуль входит на {window.location.host}/login с этим email и паролем и попадает
+            сразу в «Мой день».
+          </p>
+        )}
+        <button className="button" disabled={save.isPending}>
+          {q.data?.email ? 'Сохранить новый пароль' : 'Создать вход'}
+        </button>
+      </form>
     </>
   );
 }

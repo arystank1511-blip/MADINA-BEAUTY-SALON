@@ -13,10 +13,11 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiCookieAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { Admin, AuthRequest, safeUser, SessionGuard } from '../auth/auth';
+import { Admin, AuthRequest, hashPassword, safeUser, SessionGuard, Staff } from '../auth/auth';
 import { Db } from '../db';
 import {
   AdminBookingDto,
+  MasterLoginDto,
   CaptionDto,
   PhotoDto,
   PromoDto,
@@ -283,6 +284,7 @@ export class AdminController {
   create(@Body() b: AdminBookingDto) {
     return this.booking.create(b, b.customerId);
   }
+  @Staff()
   @Post('quick-appointments')
   @ApiOperation({ summary: 'Запись клиента без аккаунта (имя, телефон) — для мастера' })
   quick(@Body() b: QuickBookingDto) {
@@ -292,6 +294,7 @@ export class AdminController {
       { walkIn: true },
     );
   }
+  @Staff()
   @Get('day')
   @ApiOperation({ summary: 'День мастера: часы работы, перерывы, отсутствия и записи' })
   async day(@Query() q: DayQuery) {
@@ -389,6 +392,7 @@ export class AdminController {
       appointments,
     };
   }
+  @Staff()
   @Get('pending')
   @ApiOperation({ summary: 'Заявки с сайта, ожидающие подтверждения мастера' })
   pending() {
@@ -414,6 +418,36 @@ export class AdminController {
       orderBy: { startsAt: 'asc' },
     });
   }
+  @Get('master-login')
+  @ApiOperation({ summary: 'Логин мастера для «Мой день» (без пароля)' })
+  async masterLogin() {
+    const master = await this.db.user.findFirst({
+      where: { role: 'MASTER' },
+      orderBy: { createdAt: 'asc' },
+    });
+    return { email: master?.email ?? null };
+  }
+  @Put('master-login')
+  @ApiOperation({ summary: 'Создать или изменить вход мастера; старые входы мастера завершаются' })
+  async masterLoginSave(@Body() b: MasterLoginDto) {
+    const [master, taken] = await Promise.all([
+      this.db.user.findFirst({ where: { role: 'MASTER' }, orderBy: { createdAt: 'asc' } }),
+      this.db.user.findUnique({ where: { email: b.email } }),
+    ]);
+    if (taken && taken.id !== master?.id)
+      fail(409, 'EMAIL_TAKEN', 'Этот email уже занят. Укажите другой.');
+    const passwordHash = await hashPassword(b.password);
+    const name = (await this.db.master.findFirst({ where: { isActive: true } }))?.name ?? 'Мастер';
+    const user = master
+      ? await this.db.user.update({
+          where: { id: master.id },
+          data: { email: b.email, passwordHash },
+        })
+      : await this.db.user.create({ data: { email: b.email, passwordHash, name, role: 'MASTER' } });
+    // A new password signs the master out everywhere; she logs in again with the new one.
+    await this.db.session.deleteMany({ where: { userId: user.id } });
+    return { email: user.email };
+  }
   @Get('promo') @ApiOperation({ summary: 'Баннер акции на сайте' }) promo() {
     return this.site.promo();
   }
@@ -421,9 +455,10 @@ export class AdminController {
     if (b.enabled && !b.text.trim()) fail(400, 'PROMO_EMPTY', 'Напишите текст акции.');
     return this.site.savePromo({ enabled: b.enabled, text: b.text, until: b.until ?? null });
   }
-  @Post('gallery') @ApiOperation({ summary: 'Добавить фото работы' }) photoAdd(
-    @Body() b: PhotoDto,
-  ) {
+  @Staff()
+  @Post('gallery')
+  @ApiOperation({ summary: 'Добавить фото работы' })
+  photoAdd(@Body() b: PhotoDto) {
     return this.site.addPhoto(b);
   }
   @Patch('gallery/:id') @ApiOperation({ summary: 'Подпись к фото' }) photoCaption(
@@ -447,6 +482,7 @@ export class AdminController {
   clientCard(@Param('phone') phone: string) {
     return this.clients.card(this.clientKey(phone));
   }
+  @Staff()
   @Put('clients/:phone')
   @ApiOperation({ summary: 'Заметка, день рождения и «только через WhatsApp»' })
   clientSave(@Param('phone') phone: string, @Body() b: ClientDto) {
@@ -467,6 +503,7 @@ export class AdminController {
   statistics(@Query() q: StatsQuery) {
     return this.stats.period(q.from, q.to);
   }
+  @Staff()
   @Patch('appointments/:id/payment')
   @ApiOperation({ summary: 'Оплата визита: сумма и способ; визит становится завершённым' })
   async payment(@Param('id', ParseUUIDPipe) id: string, @Body() b: PaymentDto) {
@@ -562,6 +599,7 @@ export class AdminController {
       reminderParams({ guestName: 'Тест', startsAt, serviceName: 'Пробное сообщение' }),
     );
   }
+  @Staff()
   @Patch('appointments/:id/reminded')
   @ApiOperation({ summary: 'Отметить, что клиенту отправлено напоминание в WhatsApp' })
   async reminded(@Param('id', ParseUUIDPipe) id: string) {
@@ -573,17 +611,19 @@ export class AdminController {
     if (!count) fail(404, 'NOT_FOUND', 'Запись не найдена или уже не активна.');
     return { remindedAt };
   }
+  @Staff()
   @Patch('appointments/:id/confirm')
   @ApiOperation({ summary: 'Подтвердить заявку с сайта' })
   confirm(@Param('id', ParseUUIDPipe) id: string, @Req() req: AuthRequest) {
     return this.booking.change(id, req.actor, 'confirm');
   }
-  @Patch('appointments/:id/cancel') @ApiOperation({ summary: 'Отменить будущую запись' }) cancel(
-    @Param('id', ParseUUIDPipe) id: string,
-    @Req() req: AuthRequest,
-  ) {
+  @Staff()
+  @Patch('appointments/:id/cancel')
+  @ApiOperation({ summary: 'Отменить будущую запись' })
+  cancel(@Param('id', ParseUUIDPipe) id: string, @Req() req: AuthRequest) {
     return this.booking.change(id, req.actor);
   }
+  @Staff()
   @Patch('appointments/:id/no-show')
   @ApiOperation({ summary: 'Клиент не пришёл: отметка для начавшейся подтверждённой записи' })
   noShow(@Param('id', ParseUUIDPipe) id: string, @Req() req: AuthRequest) {

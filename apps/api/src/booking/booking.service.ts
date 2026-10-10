@@ -5,7 +5,7 @@ import { Db } from '../db';
 import { config } from '../config';
 import { fail, unavailable } from '../errors';
 import { BookingDto, ListDto } from '../dto';
-import { Actor, safeUser } from '../auth/auth';
+import { Actor, isStaff, safeUser } from '../auth/auth';
 import { startOfDay, salonDate, slotsForDay } from '../availability/rules';
 export type Tx = Prisma.TransactionClient;
 /** Who the visit is for: a registered customer or a person known only by name. */
@@ -148,7 +148,7 @@ export class BookingService {
   }
   async get(id: string, actor: Actor) {
     const a = await this.db.appointment.findUnique({ where: { id }, include: appointmentInclude });
-    if (!a || (actor.role !== 'ADMIN' && a.customerId !== actor.id))
+    if (!a || (!isStaff(actor) && a.customerId !== actor.id))
       fail(404, 'NOT_FOUND', 'Запись не найдена.');
     return a;
   }
@@ -163,7 +163,7 @@ export class BookingService {
         await this.lockMaster(tx, initial.masterId);
         const a = await tx.appointment.findUniqueOrThrow({ where: { id } });
         if (action === 'confirm') {
-          if (actor.role !== 'ADMIN') fail(403, 'FORBIDDEN', 'Доступ запрещён.');
+          if (!isStaff(actor)) fail(403, 'FORBIDDEN', 'Доступ запрещён.');
           if (a.status === 'CONFIRMED') return a;
           if (a.status !== 'PENDING' || !a.holdUntil || a.holdUntil <= new Date())
             fail(409, 'HOLD_EXPIRED', 'Заявка уже неактуальна: время освободилось или отменено.');
@@ -174,7 +174,7 @@ export class BookingService {
           });
         }
         if (action === 'noShow') {
-          if (actor.role !== 'ADMIN') fail(403, 'FORBIDDEN', 'Доступ запрещён.');
+          if (!isStaff(actor)) fail(403, 'FORBIDDEN', 'Доступ запрещён.');
           if (a.status === 'NO_SHOW') return a;
           // Visits are completed automatically the next morning, so a late «не пришёл» still works.
           if ((a.status !== 'CONFIRMED' && a.status !== 'COMPLETED') || a.startsAt > new Date())
@@ -186,7 +186,7 @@ export class BookingService {
           });
         }
         if (action === 'complete') {
-          if (actor.role !== 'ADMIN') fail(403, 'FORBIDDEN', 'Доступ запрещён.');
+          if (!isStaff(actor)) fail(403, 'FORBIDDEN', 'Доступ запрещён.');
           if (a.status === 'COMPLETED') return a;
           if (a.status !== 'CONFIRMED' || a.endsAt > new Date())
             fail(

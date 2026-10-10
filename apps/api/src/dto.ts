@@ -337,3 +337,32 @@ export class PromoDto {
   @Matches(/^\d{4}-\d{2}-\d{2}$/)
   until?: string | null;
 }
+class PushKeysDto {
+  @ApiProperty() @IsString() @Length(10, 200) p256dh!: string;
+  @ApiProperty() @IsString() @Length(5, 100) auth!: string;
+}
+export class PushEndpointDto {
+  @ApiProperty()
+  @IsString()
+  @Length(10, 1000)
+  @Matches(/^https:\/\//, { message: 'Адрес подписки должен быть https.' })
+  endpoint!: string;
+}
+export class PushSubscriptionDto extends PushEndpointDto {
+  @ApiProperty({ type: PushKeysDto })
+  @ValidateNested()
+  @Type(() => PushKeysDto)
+  keys!: PushKeysDto;
+}
+export class MasterLoginDto {
+  @ApiProperty({ example: 'nurgul@madina.kz' })
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim().toLowerCase() : value,
+  )
+  @IsEmail()
+  email!: string;
+  @ApiProperty({ description: 'Не короче 10 символов' })
+  @IsString()
+  @Length(10, 128)
+  password!: string;
+}

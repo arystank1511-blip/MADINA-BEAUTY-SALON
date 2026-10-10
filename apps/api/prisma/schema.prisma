@@ -8,6 +8,8 @@ datasource db {
 enum Role {
   CUSTOMER
   ADMIN
+  /// The salon's master: «Мой день» only, no prices, staff or settings.
+  MASTER
 }
 enum AppointmentStatus {
   PENDING
@@ -25,6 +27,7 @@ model User {
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
   sessions Session[]
+  pushSubscriptions PushSubscription[]
   appointments Appointment[] @relation("Customer")
   cancellations Appointment[] @relation("Canceller")
 }
@@ -175,4 +178,15 @@ model Photo {
   height Int
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   @@index([createdAt])
+}
+/// A browser that receives push notifications (the master's phone, the owner's computer).
+model PushSubscription {
+  id String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint String @unique
+  p256dh String
+  auth String
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  @@index([userId])
 }

@@ -20,6 +20,7 @@ import { Growth } from './growth';
 import { Stats } from './stats';
 import { Clients } from './clients';
 import { Site } from './site';
+import { Push, PushController } from './push';
 import { config, isAllowedOrigin } from './config';
 @Module({
   controllers: [
@@ -28,6 +29,7 @@ import { config, isAllowedOrigin } from './config';
     AdminController,
     PublicController,
     RemindersController,
+    PushController,
   ],
   providers: [
     Db,
@@ -40,6 +42,7 @@ import { config, isAllowedOrigin } from './config';
     Stats,
     Clients,
     Site,
+    Push,
   ],
 })
 export class AppModule {}
