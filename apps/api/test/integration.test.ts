@@ -1168,6 +1168,106 @@ describe.sequential('real PostgreSQL, HTTP and independent Nest instances', () =
     expect(me.user.role).toBe('ADMIN');
     expect(me.user.passwordHash).toBeUndefined();
   });
+  it('master login sees «Мой день» only; staff devices get push on new requests', async () => {
+    process.env.PUSH_DRY_RUN = '1';
+    const email = `master-${randomUUID().slice(0, 8)}@example.com`;
+    try {
+      expect(
+        (await call('/admin/master-login', 'PUT', { email, password: 'MasterPass123' }, c1)).status,
+      ).toBe(403);
+      expect(
+        (await call('/admin/master-login', 'PUT', { email, password: 'short' }, admin)).status,
+      ).toBe(400);
+      expect(
+        (await call('/admin/master-login', 'PUT', { email, password: 'MasterPass123' }, admin))
+          .status,
+      ).toBe(200);
+      expect((await call('/admin/master-login', 'GET', undefined, admin)).body).toEqual({ email });
+      const login = await call('/auth/login', 'POST', { email, password: 'MasterPass123' });
+      expect(login.status).toBe(201);
+      const nurgul = login.cookie;
+      const session = (await call('/auth/session', 'GET', undefined, nurgul)).body as unknown as {
+        user: { role: string };
+      };
+      expect(session.user.role).toBe('MASTER');
+      // «Мой день» works; owner-only pages do not.
+      for (const path of ['/admin/day', '/admin/pending'])
+        expect((await call(path, 'GET', undefined, nurgul)).status).toBe(200);
+      for (const path of [
+        '/admin/services',
+        '/admin/stats',
+        '/admin/clients',
+        '/admin/master-login',
+      ])
+        expect((await call(path, 'GET', undefined, nurgul)).status).toBe(403);
+
+      const endpoint = `https://push.example.com/${randomUUID()}`;
+      const keys = { p256dh: 'BOr'.padEnd(87, 'x'), auth: 'auth-secret-1' };
+      expect((await call('/push/subscribe', 'POST', { endpoint, keys }, c1)).status).toBe(403);
+      expect(
+        (await call('/push/subscribe', 'POST', { endpoint: 'http://x/y', keys }, nurgul)).status,
+      ).toBe(400);
+      expect((await call('/push/subscribe', 'POST', { endpoint, keys }, nurgul)).status).toBe(201);
+      expect(
+        (
+          (await call('/push/key', 'GET', undefined, nurgul)).body as unknown as {
+            publicKey: string;
+          }
+        ).publicKey,
+      ).toMatch(/^[A-Za-z0-9_-]{80,}$/);
+
+      const { Push } = loadCompiled('../dist/src/push.js') as {
+        Push: new (...args: never[]) => {
+          sent: { endpoint: string; message: { title: string } }[];
+        };
+      };
+      const sent = apps[0].get(Push).sent;
+      const day = Temporal.PlainDate.from(salonDate(new Date(), 'Asia/Almaty'))
+        .add({ days: 20 + Math.floor(Math.random() * 35) })
+        .toString();
+      const res = await fetch(urls[0] + '/api/v1/booking-requests', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          origin,
+          'x-csrf-protection': '1',
+          'x-forwarded-for': `198.51.100.${Math.floor(Math.random() * 250) + 1}`,
+        },
+        body: JSON.stringify({
+          serviceId: service,
+          masterId: master,
+          startsAt: localInstant(day, '11:00', 'Asia/Almaty').toISOString(),
+          name: 'Алия',
+          phone: '+7 701 444 55 66',
+        }),
+      });
+      expect(res.status).toBe(201);
+      const request = (await res.json()) as { id: string };
+      expect(sent.find((s) => s.endpoint === endpoint)?.message.title).toBe('Новая заявка: Алия');
+      // The master answers the request from her phone.
+      const confirmed = await call(
+        `/admin/appointments/${request.id}/confirm`,
+        'PATCH',
+        {},
+        nurgul,
+      );
+      expect(confirmed.body.status).toBe('CONFIRMED');
+      expect(
+        ((await call('/push/test', 'POST', {}, nurgul)).body as unknown as { sent: number }).sent,
+      ).toBeGreaterThan(0);
+
+      // A new password signs the master out everywhere.
+      await call('/admin/master-login', 'PUT', { email, password: 'AnotherPass456' }, admin);
+      expect((await call('/admin/day', 'GET', undefined, nurgul)).status).toBe(401);
+      await db.appointment.update({
+        where: { id: request.id },
+        data: { status: 'CANCELLED', cancelledAt: new Date() },
+      });
+    } finally {
+      delete process.env.PUSH_DRY_RUN;
+      await db.user.deleteMany({ where: { email } });
+    }
+  });
   it('rate limits abusive client without blocking another behind the trusted proxy', async () => {
     const attempt = async (ip: string) =>
       fetch(urls[0] + '/api/v1/auth/login', {

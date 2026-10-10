@@ -14,12 +14,14 @@ import {
   Service,
   timeLabel,
   todayIn,
+  useMe,
 } from '../api';
 import { ErrorBox, Loading, Modal, WhatsAppIcon } from '../components';
 import { intl, minutesUntil, Remind, Reminded } from '../remind';
 import { Paid, PaymentDialog } from '../payment';
 import { ClientInfo, isBirthdayToday, NoteDialog } from '../clients';
 import { PhotoUpload } from '../site';
+import { NotifyCard, useMasterManifest } from '../push';
 
 interface Span {
   start: string;
@@ -97,6 +99,8 @@ export function MasterDay({ config }: { config: Config }) {
   const [paying, setPaying] = useState<Appointment | null>(null);
   const [noting, setNoting] = useState<Appointment | null>(null);
   const client = useQueryClient();
+  const me = useMe();
+  useMasterManifest();
   const day = useQuery({
     queryKey: ['day', date],
     queryFn: () => api<Day>('/admin/day?date=' + date),
@@ -133,10 +137,13 @@ export function MasterDay({ config }: { config: Config }) {
           <p className="eyebrow">МАСТЕР {day.data?.master.name.toUpperCase()}</p>
           <h1>Мой день</h1>
         </div>
-        <Link to="/admin" className="md-settings" aria-label="Цены и настройки">
-          <Settings />
-        </Link>
+        {me.data?.role === 'ADMIN' && (
+          <Link to="/admin" className="md-settings" aria-label="Цены и настройки">
+            <Settings />
+          </Link>
+        )}
       </div>
+      <NotifyCard />
 
       {pending.data && pending.data.length > 0 && (
         <div className="md-pending" role="region" aria-label="Новые заявки">

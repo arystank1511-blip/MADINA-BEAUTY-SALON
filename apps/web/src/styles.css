@@ -3345,3 +3345,27 @@ tr.clickable:hover td {
     transition: none;
   }
 }
+/* «Мой день»: notifications card */
+.md-notify {
+  display: grid;
+  gap: 12px;
+  margin: 18px 0 22px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  font-size: 15px;
+}
+.md-notify p {
+  margin: 0;
+}
+.md-notify.off {
+  border-color: var(--whatsapp);
+}
+.md-notify.denied,
+.md-notify.install {
+  border-color: #ffd75e;
+}
+.md-notify-actions {
+  display: flex;
+  gap: 10px;
+}

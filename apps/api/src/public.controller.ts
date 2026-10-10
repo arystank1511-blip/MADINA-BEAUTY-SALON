@@ -10,6 +10,7 @@ import { BookingService } from './booking/booking.service';
 import { intlPhone } from './reminders';
 import { Clients } from './clients';
 import { Site } from './site';
+import { Push } from './push';
 @ApiTags('Публичные')
 @Controller()
 export class PublicController {
@@ -19,6 +20,7 @@ export class PublicController {
     private telegram: Telegram,
     private clients: Clients,
     private site: Site,
+    private push: Push,
   ) {}
   private requests = new Map<string, { count: number; until: number }>();
   @Get('config') @ApiOperation({ summary: 'Настройки салона' }) settings() {
@@ -97,14 +99,21 @@ export class PublicController {
       currencyDisplay: 'narrowSymbol',
       maximumFractionDigits: 2,
     }).format(a.priceMinor / 100);
-    const telegram = await this.telegram.notify([
-      `Новая заявка · ${config.name}`,
-      `Услуга: ${a.serviceName} (${price}, ${a.durationMinutes} мин)`,
-      `Мастер: ${a.master.name}`,
-      `Время: ${when}`,
-      `Имя: ${body.name}`,
-      `Телефон: ${body.phone}`,
-      'Время придержано на 3 часа. Подтвердите в «Мой день».',
+    const [telegram] = await Promise.all([
+      this.telegram.notify([
+        `Новая заявка · ${config.name}`,
+        `Услуга: ${a.serviceName} (${price}, ${a.durationMinutes} мин)`,
+        `Мастер: ${a.master.name}`,
+        `Время: ${when}`,
+        `Имя: ${body.name}`,
+        `Телефон: ${body.phone}`,
+        'Время придержано на 3 часа. Подтвердите в «Мой день».',
+      ]),
+      this.push.notifyStaff({
+        title: `Новая заявка: ${body.name}`,
+        body: `${when} · ${a.serviceName}. Подтвердите или откажите.`,
+        tag: `request-${a.id}`,
+      }),
     ]);
     return { id: a.id, startsAt: a.startsAt, holdUntil: a.holdUntil, telegram };
   }

@@ -19,7 +19,16 @@ const Book = lazy(() => import('./pages/Book').then((m) => ({ default: m.Book })
 const Auth = lazy(() => import('./pages/Auth').then((m) => ({ default: m.Auth })));
 const Admin = lazy(() => import('./pages/Admin').then((m) => ({ default: m.Admin })));
 const MasterDay = lazy(() => import('./pages/MasterDay').then((m) => ({ default: m.MasterDay })));
-function Gate({ children, admin = false }: { children: React.ReactNode; admin?: boolean }) {
+/** `admin`: owner only; `staff`: owner or master («Мой день»). */
+function Gate({
+  children,
+  admin = false,
+  staff = false,
+}: {
+  children: React.ReactNode;
+  admin?: boolean;
+  staff?: boolean;
+}) {
   const me = useMe();
   const location = useLocation();
   if (me.isPending) return <Loading />;
@@ -31,7 +40,10 @@ function Gate({ children, admin = false }: { children: React.ReactNode; admin?: 
         replace
       />
     );
-  if (admin && me.data.role !== 'ADMIN') return <Navigate to="/" replace />;
+  const role = me.data.role;
+  if (staff && role !== 'ADMIN' && role !== 'MASTER') return <Navigate to="/" replace />;
+  if (admin && role !== 'ADMIN')
+    return <Navigate to={role === 'MASTER' ? '/master' : '/'} replace />;
   return children;
 }
 export function App() {
@@ -118,7 +130,9 @@ export function App() {
             <Link to="/#masters">{t('Мастер')}</Link>
             <Link to="/#about">{t('О салоне')}</Link>
             <Link to="/#contacts">{t('Контакты')}</Link>
-            {me.data?.role === 'ADMIN' && <Link to="/master">Мой день</Link>}
+            {(me.data?.role === 'ADMIN' || me.data?.role === 'MASTER') && (
+              <Link to="/master">Мой день</Link>
+            )}
             {me.data?.role === 'ADMIN' && <Link to="/admin">Управление</Link>}
             {me.data && (
               <button className="nav-logout" onClick={() => void logout()}>
@@ -178,7 +192,7 @@ export function App() {
           <Route
             path="/master"
             element={
-              <Gate admin>
+              <Gate staff>
                 <Suspense fallback={<Loading />}>
                   <MasterDay config={config} />
                 </Suspense>

@@ -40,6 +40,9 @@ export const safeUser = { id: true, name: true, email: true, role: true } as con
 export type Actor = { id: string; name: string; email: string; role: Role };
 export type AuthRequest = Request & { actor: Actor };
 export const Admin = () => SetMetadata('admin', true);
+/** Open to the master too: the handlers behind «Мой день». Overrides a class-level Admin(). */
+export const Staff = () => SetMetadata('staff', true);
+export const isStaff = (actor: Actor) => actor.role === 'ADMIN' || actor.role === 'MASTER';
 const digest = (token: string) => createHash('sha256').update(token).digest('hex');
 @Injectable()
 export class SessionGuard implements CanActivate {
@@ -57,7 +60,10 @@ export class SessionGuard implements CanActivate {
     });
     if (!session || session.expiresAt <= new Date())
       fail(401, 'UNAUTHENTICATED', 'Сессия завершена. Войдите снова.');
-    if (
+    const staff = this.reflector.get<boolean>('staff', ctx.getHandler());
+    if (staff) {
+      if (!isStaff(session.user)) fail(403, 'FORBIDDEN', 'Доступ только для салона.');
+    } else if (
       this.reflector.getAllAndOverride<boolean>('admin', [ctx.getHandler(), ctx.getClass()]) &&
       session.user.role !== 'ADMIN'
     )
