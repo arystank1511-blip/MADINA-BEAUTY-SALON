@@ -3467,63 +3467,6 @@ tr.clickable:hover td {
   color: var(--muted);
   margin: -12px 0 28px;
 }
-/* Gift certificate */
-.gift-page {
-  max-width: 640px;
-}
-.gift-card {
-  position: relative;
-  padding: 40px 32px;
-  border: 1px solid var(--accent);
-  outline: 1px solid var(--line);
-  outline-offset: 8px;
-  background: var(--surface);
-  text-align: center;
-  margin: 24px 8px 40px;
-}
-.gift-card.inactive {
-  opacity: 0.6;
-}
-.gift-logo {
-  height: 40px;
-  margin-bottom: 20px;
-}
-.gift-amount {
-  font-size: clamp(44px, 12vw, 72px);
-  font-weight: 800;
-  margin: 8px 0 12px;
-}
-.gift-to {
-  font-size: 22px;
-  margin: 0 0 24px;
-}
-.gift-to span {
-  color: var(--muted);
-  font-size: 16px;
-}
-.gift-card dl {
-  display: flex;
-  justify-content: center;
-  gap: 40px;
-  margin: 0 0 24px;
-}
-.gift-card dt {
-  color: var(--muted);
-  font-size: 13px;
-}
-.gift-card dd {
-  margin: 4px 0 0;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-}
-.gift-status {
-  color: var(--error);
-  font-weight: 700;
-}
-.gift-page .form-actions {
-  justify-content: center;
-  flex-wrap: wrap;
-}
 .admin-reviews {
   list-style: none;
   padding: 0;
@@ -3562,9 +3505,6 @@ tr.clickable:hover td {
   .mobile-cta,
   .no-print {
     display: none !important;
-  }
-  .gift-card {
-    break-inside: avoid;
   }
 }
 .photo-price {
@@ -3636,13 +3576,6 @@ tr.clickable:hover td {
     padding: 24px;
   }
 }
-.gift-card p {
-  color: var(--text);
-}
-.gift-card .eyebrow,
-.gift-card .caption {
-  color: var(--muted);
-}
 .reviews .stars {
   display: flex;
   gap: 3px;
@@ -3701,4 +3634,323 @@ table.compact {
 table.compact td,
 table.compact th {
   padding-inline: 10px;
+}
+/* Gift certificate: a paper card, the same on screen and on A4. */
+.gift-page {
+  max-width: 880px;
+  margin-inline: auto;
+}
+.gc p,
+.gc strong,
+.gc em,
+.gc dd {
+  color: var(--ink);
+}
+.gc-sheet {
+  margin: 32px 0 36px;
+}
+.gc {
+  --paper: #fbf8f3;
+  --ink: #161412;
+  --ink-soft: #6f6862;
+  --red: #c40f1c;
+  position: relative;
+  display: grid;
+  grid-template-columns: 30% 1fr;
+  aspect-ratio: 2 / 1;
+  overflow: hidden;
+  color: var(--ink);
+  background: var(--paper);
+  border-radius: 6px;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.06) inset,
+    0 30px 80px rgba(0, 0, 0, 0.55);
+  font-family: 'Manrope Variable', sans-serif;
+  /* Cormorant draws old-style figures by default: «10 000» would read as «IO OOO». */
+  font-variant-numeric: lining-nums;
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}
+/* A fine inner frame, like on engraved vouchers. */
+.gc::after {
+  content: '';
+  position: absolute;
+  inset: 12px 12px 12px calc(30% + 12px);
+  border: 1px solid rgba(22, 20, 18, 0.14);
+  pointer-events: none;
+}
+.gc-band {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 24px 16px;
+  color: #fff;
+  background-color: var(--red);
+  background-image:
+    radial-gradient(rgba(255, 255, 255, 0.16) 1px, transparent 1.5px),
+    linear-gradient(160deg, rgba(255, 255, 255, 0.1), rgba(0, 0, 0, 0.18));
+  background-size:
+    9px 9px,
+    100% 100%;
+}
+.gc-band::after {
+  content: '';
+  position: absolute;
+  inset: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+}
+.gc-mark {
+  width: 72%;
+  max-width: 170px;
+  filter: brightness(0) invert(1);
+}
+.gc-band-sub {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.32em;
+  opacity: 0.8;
+}
+.gc-body {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  padding: 5.5% 6% 4.5%;
+  min-width: 0;
+}
+.gc-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+.gc-eyebrow {
+  color: var(--red);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.28em;
+}
+.gc-no {
+  color: var(--ink-soft);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+}
+.gc-amount {
+  margin: auto 0 0;
+  padding-top: 4%;
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-weight: 600;
+  font-size: clamp(54px, 10.5vw, 104px);
+  line-height: 0.95;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+.gc-amount span {
+  margin-left: 0.12em;
+  color: var(--red);
+  font-size: 0.55em;
+}
+.gc-names {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 36px;
+  margin: 14px 0 auto;
+  padding-top: 14px;
+  border-top: 1px solid rgba(22, 20, 18, 0.14);
+}
+.gc-names p {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+}
+.gc-names small,
+.gc-foot dt {
+  color: var(--ink-soft);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+.gc-names strong {
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-weight: 600;
+  font-size: clamp(22px, 3.4vw, 32px);
+  line-height: 1.1;
+}
+.gc-names em {
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-weight: 500;
+  font-style: italic;
+  font-size: clamp(18px, 2.8vw, 25px);
+  line-height: 1.15;
+}
+.gc-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 16px;
+  margin-top: 16px;
+}
+.gc-foot dl {
+  display: flex;
+  gap: 28px;
+  margin: 0;
+}
+.gc-foot dd {
+  margin: 5px 0 0;
+  font-size: 14px;
+  font-weight: 700;
+}
+.gc .gc-code {
+  padding: 4px 10px;
+  border: 1px dashed var(--red);
+  color: var(--red);
+  letter-spacing: 0.24em;
+}
+.gc-qr-wrap {
+  display: grid;
+  justify-items: center;
+  gap: 3px;
+  color: var(--ink);
+}
+.gc-qr {
+  width: 62px;
+  height: 62px;
+}
+.gc-qr-wrap span {
+  color: var(--ink-soft);
+  font-size: 8.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.gc .gc-terms {
+  margin: 12px 0 0;
+  color: var(--ink-soft);
+  font-size: 10px;
+  line-height: 1.5;
+}
+.gc-stamp {
+  position: absolute;
+  top: 38%;
+  left: 52%;
+  padding: 8px 18px;
+  border: 3px double var(--red);
+  border-radius: 6px;
+  color: var(--red);
+  background: rgba(251, 248, 243, 0.85);
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  transform: rotate(-12deg);
+}
+.gc.inactive .gc-body > :not(.gc-head) {
+  opacity: 0.55;
+}
+.gc-cut {
+  display: none;
+}
+.gift-page .form-actions {
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.gc-hint {
+  text-align: center;
+}
+@media (max-width: 640px) {
+  .gc {
+    grid-template-columns: 1fr;
+    aspect-ratio: auto;
+  }
+  .gc::after {
+    inset: calc(96px + 10px) 10px 10px;
+  }
+  .gc-band {
+    flex-direction: row;
+    height: 96px;
+    padding: 0 20px;
+    gap: 12px;
+  }
+  .gc-band::after {
+    inset: 8px;
+  }
+  .gc-mark {
+    width: 74px;
+  }
+  .gc-no {
+    display: none;
+  }
+  .gc-band-sub {
+    display: none;
+  }
+  .gc-body {
+    padding: 26px 24px 22px;
+    gap: 0;
+  }
+  .gc-amount {
+    padding-top: 18px;
+  }
+  .gc-names {
+    margin-bottom: 8px;
+  }
+  .gc-foot dl {
+    gap: 18px;
+  }
+}
+@page gift {
+  size: A4 landscape;
+  margin: 0;
+}
+@media print {
+  .gift-page {
+    page: gift;
+    max-width: none;
+    margin: 0;
+    padding: 0;
+  }
+  main:has(.gift-page) {
+    padding: 0;
+    margin: 0;
+    max-width: none;
+  }
+  .gc-sheet {
+    display: grid;
+    place-items: center;
+    align-content: center;
+    width: 297mm;
+    height: 209mm;
+    margin: 0;
+  }
+  /* 200 × 100 mm: half of an A4 sheet, a common voucher size. */
+  .gc {
+    width: 200mm;
+    height: 100mm;
+    aspect-ratio: auto;
+    box-shadow: none;
+    border-radius: 0;
+    outline: 0.25mm dashed #9a948e;
+    outline-offset: 5mm;
+    break-inside: avoid;
+  }
+  .gc-amount {
+    font-size: 26mm;
+  }
+  .gc-names strong {
+    font-size: 8.5mm;
+  }
+  .gc-names em {
+    font-size: 6.5mm;
+  }
+  .gc-cut {
+    display: block;
+    margin: 7mm 0 0;
+    color: #9a948e;
+    font-size: 3mm;
+    letter-spacing: 0.2em;
+  }
+  .gc-hint {
+    display: none;
+  }
 }
