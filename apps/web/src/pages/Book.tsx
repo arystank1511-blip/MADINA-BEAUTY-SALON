@@ -149,7 +149,7 @@ export function Book({ config, admin = false }: { config: Config; admin?: boolea
         masterId,
         startsAt: time,
         name: guestName.trim(),
-        ...(guestPhone.trim() ? { phone: guestPhone.trim() } : {}),
+        phone: guestPhone.trim(),
       }),
     onSuccess: () => {
       setSent(true);
@@ -488,12 +488,15 @@ export function Book({ config, admin = false }: { config: Config; admin?: boolea
                       />
                     </label>
                     <label>
-                      Телефон (необязательно)
+                      Телефон (WhatsApp)
                       <input
                         type="tel"
                         autoComplete="tel"
                         inputMode="tel"
+                        required
+                        minLength={10}
                         maxLength={30}
+                        placeholder="+7 777 123 45 67"
                         pattern="[+0-9\s()\-]*"
                         value={guestPhone}
                         onChange={(e) => setGuestPhone(e.target.value)}

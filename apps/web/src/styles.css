@@ -2758,3 +2758,9 @@ tr.soon-row td:first-child {
 .wa-form .button {
   justify-self: start;
 }
+td button.confirm-button {
+  background: var(--whatsapp);
+  border-color: var(--whatsapp);
+  color: #062b14;
+  font-weight: 700;
+}

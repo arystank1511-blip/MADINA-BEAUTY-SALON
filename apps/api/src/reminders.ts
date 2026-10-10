@@ -6,9 +6,13 @@ import { fail } from './errors';
 import { Telegram } from './telegram';
 import { activeAt } from './booking/booking.service';
 import { WhatsApp } from './whatsapp';
+import { salonDate, startOfDay } from './availability/rules';
+import { Prisma } from '@prisma/client';
 
 /** How long before a visit the salon gets its heads-up. */
 export const REMIND_MINUTES = 60;
+/** Salon time of the daily Telegram summary. */
+const SUMMARY_AT = '09:00';
 
 /** Kazakhstan number in international form (7XXXXXXXXXX) for wa.me links, or ''. */
 export const intlPhone = (phone: string | null | undefined) => {
@@ -47,9 +51,67 @@ export class Reminders {
     return { gt: now, lte: new Date(+now + REMIND_MINUTES * 60000) };
   }
   async run(now = new Date()) {
+    const completed = await this.completePast(now);
     const whatsapp = await this.remindClients(now);
     const sent = await this.alertSalon(now);
-    return { sent, whatsapp };
+    const summary = await this.morningSummary(now);
+    return { sent, whatsapp, summary, completed };
+  }
+  /**
+   * Confirmed visits from earlier days become completed, so the history and statistics are
+   * right without anyone pressing «Завершить». «Не пришёл» still works on them afterwards.
+   */
+  private async completePast(now: Date) {
+    const today = startOfDay(salonDate(now, config.timezone), config.timezone);
+    const { count } = await this.db.appointment.updateMany({
+      where: { status: 'CONFIRMED', endsAt: { lte: today } },
+      data: { status: 'COMPLETED' },
+    });
+    return count;
+  }
+  /** From 09:00 salon time, once a day: today's visits in Telegram. */
+  private async morningSummary(now: Date) {
+    if (!this.telegram.enabled || clock(now) < SUMMARY_AT) return false;
+    const date = salonDate(now, config.timezone);
+    const key = `summary:${date}`;
+    try {
+      // The row is the claim: a second run the same day fails on the primary key.
+      await this.db.setting.create({ data: { key, value: { at: now.toISOString() } } });
+    } catch (e) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') return false;
+      throw e;
+    }
+    await this.db.setting.deleteMany({ where: { key: { startsWith: 'summary:', not: key } } });
+    const visits = await this.db.appointment.findMany({
+      where: {
+        ...activeAt(now),
+        status: { in: ['CONFIRMED', 'PENDING'] },
+        startsAt: { gte: startOfDay(date, config.timezone), lt: new Date(+now + 24 * 3600000) },
+      },
+      include: { customer: { select: { name: true } } },
+      orderBy: { startsAt: 'asc' },
+    });
+    const today = visits.filter((a) => salonDate(a.startsAt, config.timezone) === date);
+    const day = new Intl.DateTimeFormat('ru-RU', {
+      timeZone: config.timezone,
+      day: 'numeric',
+      month: 'long',
+    }).format(now);
+    const pending = today.filter((a) => a.status === 'PENDING').length;
+    const ok = await this.telegram.notify([
+      `Доброе утро! Сегодня, ${day} · ${config.name}`,
+      today.length ? `Записей: ${today.length}` : 'Записей на сегодня пока нет.',
+      ...today.map(
+        (a) =>
+          `${clock(a.startsAt)} ${a.customer?.name || a.guestName || 'Клиент'} — ${a.serviceName}` +
+          (a.status === 'PENDING' ? ' (ждёт подтверждения)' : '') +
+          (a.guestPhone ? ` · ${a.guestPhone}` : ''),
+      ),
+      ...(pending ? [`Ждут подтверждения: ${pending}. Ответьте в «Мой день».`] : []),
+    ]);
+    // Telegram was down: release the claim so a later run sends the summary.
+    if (!ok) await this.db.setting.delete({ where: { key } });
+    return ok;
   }
   /** WhatsApp Business API: the client gets the approved reminder template, once per visit. */
   private async remindClients(now: Date) {

@@ -253,6 +253,12 @@ export function MasterDay({ config }: { config: Config }) {
                           ✕ Отказать
                         </button>
                       </div>
+                    ) : r.visit.status === 'COMPLETED' ? (
+                      <div className="md-actions">
+                        <button className="md-btn ghost" onClick={() => setMissing(r.visit)}>
+                          ✕ Не пришёл
+                        </button>
+                      </div>
                     ) : (
                       r.visit.status === 'CONFIRMED' &&
                       (Date.parse(r.visit.startsAt) > Date.now() ? (

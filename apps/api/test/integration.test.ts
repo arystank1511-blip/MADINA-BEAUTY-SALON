@@ -364,7 +364,7 @@ describe.sequential('real PostgreSQL, HTTP and independent Nest instances', () =
       startsAt: localInstant(next, time, 'Asia/Almaty').toISOString(),
     });
     const request = (time: string, name = 'Гость') =>
-      call('/booking-requests', 'POST', { ...booking(time), name });
+      call('/booking-requests', 'POST', { ...booking(time), name, phone: '+7 701 000 00 02' });
     const held = await request('16:00');
     expect(held.status).toBe(201);
     const row = await db.appointment.findUniqueOrThrow({ where: { id: held.body.id } });
@@ -392,6 +392,12 @@ describe.sequential('real PostgreSQL, HTTP and independent Nest instances', () =
     expect(
       (await call('/booking-requests', 'POST', { ...booking('21:00'), name: '' })).status,
     ).toBe(400);
+    // The phone is required and must be a full number.
+    for (const phone of [undefined, '', '12345', '+7 (701) 00'])
+      expect(
+        (await call('/booking-requests', 'POST', { ...booking('21:00'), name: 'Гость', phone }))
+          .status,
+      ).toBe(400);
   });
   it('master books guests without an account and sees them in the day view', async () => {
     const next = Temporal.PlainDate.from(date).add({ days: 1 }).toString();
@@ -515,7 +521,9 @@ describe.sequential('real PostgreSQL, HTTP and independent Nest instances', () =
     try {
       const soon = await visit(40),
         later = await visit(180);
-      const mine = () => sent.filter((m) => m.text.includes(guest));
+      // Only the one-hour heads-ups; the 09:00 summary may also mention the guest.
+      const mine = () =>
+        sent.filter((m) => m.text.startsWith('<b>Через') && m.text.includes(guest));
       expect((await call('/cron/reminders')).status).toBe(200);
       expect(mine()).toHaveLength(1);
       expect(mine()[0].chat_id).toBe('42');
@@ -558,6 +566,78 @@ describe.sequential('real PostgreSQL, HTTP and independent Nest instances', () =
         'TELEGRAM_API_URL',
         'CRON_SECRET',
       ])
+        delete process.env[key];
+      telegram.close();
+    }
+  });
+  it('09:00 Telegram summary once a day; past visits complete themselves, «не пришёл» still works', async () => {
+    const { createServer } = await import('node:http');
+    const sent: { text: string }[] = [];
+    const telegram = createServer((req, res) => {
+      let raw = '';
+      req.on('data', (chunk) => (raw += chunk));
+      req.on('end', () => {
+        sent.push(JSON.parse(raw));
+        res.setHeader('content-type', 'application/json').end('{"ok":true}');
+      });
+    });
+    await new Promise<void>((resolve) => telegram.listen(0, '127.0.0.1', resolve));
+    Object.assign(process.env, {
+      TELEGRAM_BOT_TOKEN: 'test-token',
+      TELEGRAM_CHAT_ID: '42',
+      TELEGRAM_API_URL: `http://127.0.0.1:${(telegram.address() as { port: number }).port}`,
+    });
+    const { Reminders } = loadCompiled('../dist/src/reminders.js') as {
+      Reminders: new (...args: never[]) => { run(now: Date): Promise<Record<string, unknown>> };
+    };
+    const reminders = apps[0].get(Reminders);
+    const today = salonDate(new Date(), 'Asia/Almaty');
+    const at = (day: string, time: string) => localInstant(day, time, 'Asia/Almaty');
+    const guest = `Утро ${randomUUID().slice(0, 6)}`;
+    const visit = (startsAt: Date) =>
+      db.appointment.create({
+        data: {
+          masterId: master2,
+          serviceId: service,
+          guestName: guest,
+          guestPhone: '+7 701 333 44 55',
+          serviceName: 'Тестовая стрижка',
+          priceMinor: 500000,
+          durationMinutes: 30,
+          bufferAfterMinutes: 0,
+          startsAt,
+          endsAt: new Date(+startsAt + 30 * 60000),
+          occupiedUntil: new Date(+startsAt + 30 * 60000),
+        },
+      });
+    await db.setting.deleteMany({ where: { key: { startsWith: 'summary:' } } });
+    const twoDaysAgo = Temporal.PlainDate.from(today).subtract({ days: 2 }).toString();
+    const past = await visit(at(twoDaysAgo, '15:30'));
+    const later = await visit(at(today, '15:30'));
+    try {
+      // Before 09:00 nothing is sent; past visits are completed on any run.
+      await reminders.run(at(today, '08:50'));
+      expect(sent.some((m) => m.text.includes('Доброе утро'))).toBe(false);
+      expect((await db.appointment.findUniqueOrThrow({ where: { id: past.id } })).status).toBe(
+        'COMPLETED',
+      );
+      expect((await db.appointment.findUniqueOrThrow({ where: { id: later.id } })).status).toBe(
+        'CONFIRMED',
+      );
+      await reminders.run(at(today, '09:05'));
+      await reminders.run(at(today, '09:15'));
+      const summaries = sent.filter((m) => m.text.includes('Доброе утро'));
+      expect(summaries).toHaveLength(1);
+      expect(summaries[0].text).toContain(`15:30 ${guest} — Тестовая стрижка`);
+      expect(summaries[0].text).not.toContain('Ждут подтверждения');
+      const missed = await call(`/admin/appointments/${past.id}/no-show`, 'PATCH', {}, admin);
+      expect(missed.body.status).toBe('NO_SHOW');
+    } finally {
+      await db.appointment.updateMany({
+        where: { id: { in: [past.id, later.id] } },
+        data: { status: 'CANCELLED', cancelledAt: new Date() },
+      });
+      for (const key of ['TELEGRAM_BOT_TOKEN', 'TELEGRAM_CHAT_ID', 'TELEGRAM_API_URL'])
         delete process.env[key];
       telegram.close();
     }

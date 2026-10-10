@@ -207,6 +207,7 @@ export function byCategory<T extends Pick<Service, 'category'>>(services: T[]) {
 export const money = (value: number, currency: string) =>
   new Intl.NumberFormat('ru-RU', {
     style: 'currency',
+    currencyDisplay: 'narrowSymbol',
     currency,
     minimumFractionDigits: value % 100 === 0 ? 0 : 2,
     maximumFractionDigits: 2,

@@ -59,7 +59,7 @@ test('guest books through WhatsApp without an account; responsive screenshots', 
   await page.locator('.slots button').first().click();
   await page.getByRole('button', { name: 'Продолжить', exact: true }).click();
   await page.getByLabel('Ваше имя').fill('Анна');
-  await page.getByLabel('Телефон (необязательно)').fill('+7 701 000 00 00');
+  await page.getByLabel('Телефон (WhatsApp)').fill('+7 701 000 00 00');
   const request = page.waitForResponse('**/api/v1/booking-requests');
   await page.getByRole('button', { name: 'Записаться', exact: true }).click();
   const response = await request;
@@ -235,7 +235,13 @@ test('master day: book a walk-in, confirm a site request, cancel', async ({ page
   const origin = new URL(page.url()).origin;
   const created = await page.request.post('/api/v1/booking-requests', {
     headers: { Origin: origin, 'X-CSRF-Protection': '1' },
-    data: { serviceId, masterId: data.master.id, startsAt: slot, name: guest },
+    data: {
+      serviceId,
+      masterId: data.master.id,
+      startsAt: slot,
+      name: guest,
+      phone: '+7 701 000 00 01',
+    },
   });
   expect(created.status()).toBe(201);
   await page.reload();
