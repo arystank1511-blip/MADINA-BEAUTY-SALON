@@ -13,9 +13,10 @@ import {
   WhatsAppIcon,
 } from './components';
 import { Home, Catalog } from './pages/Home';
-import { Auth } from './pages/Auth';
-import { Book } from './pages/Book';
 import { LangSwitch, useT } from './i18n';
+// Booking and login load on demand, so the home page ships less JavaScript.
+const Book = lazy(() => import('./pages/Book').then((m) => ({ default: m.Book })));
+const Auth = lazy(() => import('./pages/Auth').then((m) => ({ default: m.Auth })));
 const Admin = lazy(() => import('./pages/Admin').then((m) => ({ default: m.Admin })));
 const MasterDay = lazy(() => import('./pages/MasterDay').then((m) => ({ default: m.MasterDay })));
 function Gate({ children, admin = false }: { children: React.ReactNode; admin?: boolean }) {
@@ -146,8 +147,22 @@ export function App() {
         <Routes>
           <Route path="/" element={<Home config={config} />} />
           <Route path="/services" element={<Catalog config={config} />} />
-          <Route path="/book" element={<Book config={config} />} />
-          <Route path="/login" element={<Auth config={config} />} />
+          <Route
+            path="/book"
+            element={
+              <Suspense fallback={<Loading />}>
+                <Book config={config} />
+              </Suspense>
+            }
+          />
+          <Route
+            path="/login"
+            element={
+              <Suspense fallback={<Loading />}>
+                <Auth config={config} />
+              </Suspense>
+            }
+          />
           <Route path="/register" element={<Navigate to="/book" replace />} />
           <Route path="/my" element={<Navigate to="/book" replace />} />
           <Route
@@ -174,7 +189,9 @@ export function App() {
             path="/admin/new"
             element={
               <Gate admin>
-                <Book config={config} admin />
+                <Suspense fallback={<Loading />}>
+                  <Book config={config} admin />
+                </Suspense>
               </Gate>
             }
           />

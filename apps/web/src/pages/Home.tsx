@@ -1,15 +1,18 @@
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   ArrowUpRight,
   CalendarClock,
   Clock,
   MapPin,
+  Phone,
   Wallet,
   Scissors,
   Sparkles,
   UserRound,
+  Users,
 } from 'lucide-react';
-import { Config, phoneLabel, useMasters, useServices } from '../api';
+import { byCategory, Config, money, phoneLabel, Service, useMasters, useServices } from '../api';
 import {
   ButtonLink,
   ErrorBox,
@@ -38,7 +41,13 @@ export function Home({ config }: { config: Config }) {
         </div>
         <div className="hero-body">
           <h1 className="hero-logo">
-            <img src="/images/madina-logo-header.svg" alt={config.name} />
+            <img
+              src="/images/madina-logo-header.svg"
+              alt={config.name}
+              width="640"
+              height="160"
+              fetchPriority="high"
+            />
           </h1>
           <h2>
             {t('Стрижки. Цвет.')}
@@ -59,6 +68,7 @@ export function Home({ config }: { config: Config }) {
               WhatsApp
             </WhatsAppLink>
           </div>
+          <HeroFacts config={config} services={services.data} />
         </div>
         <div className="hero-bottom">
           <span>{t('ВАША ИНДИВИДУАЛЬНОСТЬ. НАША РАБОТА.')}</span>
@@ -83,18 +93,7 @@ export function Home({ config }: { config: Config }) {
             {t('От первого разговора до последнего штриха. Внимательно, спокойно и без лишнего.')}
           </p>
         </div>
-        <div className="interior brand-panel">
-          <Halftone id="about" />
-          <img
-            src="/images/madina-logo.svg"
-            alt={t('Парикмахерская «{name}»', { name: config.name })}
-            loading="lazy"
-          />
-          <p className="brand-panel-tags" aria-hidden="true">
-            {t('Мужской зал · Женский зал · Стрижки · Покраска · Укладки')}
-          </p>
-          <span>{t('ПРОСТРАНСТВО ДЛЯ ПЕРЕМЕН ↗')}</span>
-        </div>
+        <Highlights config={config} services={services.data} />
       </Section>
       <Section id="services" label={t('УСЛУГИ')}>
         <div className="section-heading">
@@ -108,7 +107,7 @@ export function Home({ config }: { config: Config }) {
         ) : services.error ? (
           <ErrorBox error={services.error} retry={() => void services.refetch()} />
         ) : (
-          <ServiceRows services={services.data || []} config={config} />
+          <HomeServices services={services.data || []} config={config} />
         )}
       </Section>
       <Section id="masters" label={t('МАСТЕР')}>
@@ -127,7 +126,10 @@ export function Home({ config }: { config: Config }) {
                     <img
                       src={m.avatarUrl}
                       alt={t('Мастер {name}', { name: m.name })}
+                      width="600"
+                      height="800"
                       loading="lazy"
+                      decoding="async"
                     />
                   ) : (
                     <div className="master-placeholder" aria-hidden="true">
@@ -136,25 +138,30 @@ export function Home({ config }: { config: Config }) {
                   )}
                   <span>0{i + 1}</span>
                 </div>
-                <div className="master-title">
-                  <h3>{m.name}</h3>
-                  <Link
-                    className="icon-button"
-                    aria-label={t('Выбрать мастера {name}', { name: m.name })}
-                    to={`/book?master=${m.id}&pinned=${m.id}`}
-                  >
-                    <ArrowUpRight />
-                  </Link>
+                <div className="master-info">
+                  <div className="master-title">
+                    <h3>{m.name}</h3>
+                  </div>
+                  <p>{t(m.description)}</p>
+                  <ul className="chips" aria-label={t('Что делает мастер')}>
+                    {[...new Set(m.services.map((s) => s.service.category).filter(Boolean))].map(
+                      (c) => (
+                        <li key={c}>{t(c)}</li>
+                      ),
+                    )}
+                    <li>{servicesCount(m.services.length, t)}</li>
+                  </ul>
+                  <ButtonLink to={`/book?master=${m.id}&pinned=${m.id}`}>
+                    {t('Записаться к {name}', { name: m.name })}
+                  </ButtonLink>
                 </div>
-                <p>{t(m.description)}</p>
-                <p className="master-services">
-                  {m.services.map((s) => t(s.service.name)).join(' · ')}
-                </p>
               </article>
             ))}
           </div>
         )}
-        <p className="caption">{t('Выберите услугу и удобное время для записи.')}</p>
+        {masters.data && masters.data.length > 1 && (
+          <p className="caption">{t('Выберите услугу и удобное время для записи.')}</p>
+        )}
       </Section>
       {!!gallery.data?.length && (
         <Section id="works" label={t('РАБОТЫ')}>
@@ -238,7 +245,12 @@ export function Home({ config }: { config: Config }) {
                 {phoneLabel(config.whatsapp)}
               </a>
             </p>
-            <small>{t('Запись и вопросы — в чате')}</small>
+            <small>
+              {t('Запись и вопросы — в чате')} ·{' '}
+              <a className="contact-link" href={`tel:+${config.whatsapp}`}>
+                <Phone size={13} aria-hidden="true" /> {t('Позвонить')}
+              </a>
+            </small>
           </div>
           <div>
             <span className="contact-icon">
@@ -264,6 +276,7 @@ export function Home({ config }: { config: Config }) {
           </span>
         </div>
       </section>
+      <MobileCta config={config} />
     </>
   );
 }
@@ -287,5 +300,183 @@ export function Catalog({ config }: { config: Config }) {
         <ServiceRows services={services.data || []} config={config} />
       )}
     </section>
+  );
+}
+
+type T = ReturnType<typeof useT>['t'];
+/** «29 услуг» with Russian plural forms; Kazakh has a single form. */
+function servicesCount(n: number, t: T) {
+  const mod10 = n % 10,
+    mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return t('{n} услуга', { n });
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return t('{n} услуги', { n });
+  return t('{n} услуг', { n });
+}
+const cheapest = (services: Service[] = []) =>
+  services.length ? Math.min(...services.map((s) => s.priceMinor)) : null;
+/** The cheapest haircut says more than the cheapest wash; falls back to any service. */
+const cheapestHaircut = (services: Service[] = []) =>
+  cheapest(services.filter((s) => /стриж|нулевк/i.test(s.name))) ?? cheapest(services);
+
+/** Salon-local «HH:MM» now, and the opening hours parsed from «Ежедневно · 10:00–18:00». */
+function useOpenStatus(config: Config) {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 60000);
+    return () => clearInterval(id);
+  }, []);
+  const hours = config.hours.match(/(\d{1,2}:\d{2})\s*[–-]\s*(\d{1,2}:\d{2})/);
+  if (!hours) return null;
+  const pad = (s: string) => s.padStart(5, '0');
+  const [open, close] = [pad(hours[1]), pad(hours[2])];
+  const time = new Intl.DateTimeFormat('en-GB', {
+    timeZone: config.timezone,
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).format(now);
+  if (time >= open && time < close) return { open: true, close, opens: open, today: true };
+  return { open: false, close, opens: open, today: time < open };
+}
+
+/** Three answers a visitor wants first: open now?, where?, how much? */
+function HeroFacts({ config, services }: { config: Config; services?: Service[] }) {
+  const { t } = useT();
+  const status = useOpenStatus(config);
+  const from = cheapestHaircut(services);
+  const address = t(config.address).split(', ').slice(0, 3).join(', ');
+  return (
+    <ul className="hero-facts">
+      {status && (
+        <li className={status.open ? 'is-open' : 'is-closed'}>
+          <span className="status-dot" aria-hidden="true" />
+          {status.open
+            ? t('Открыто до {time}', { time: status.close })
+            : status.today
+              ? t('Откроемся сегодня в {time}', { time: status.opens })
+              : t('Откроемся завтра в {time}', { time: status.opens })}
+        </li>
+      )}
+      <li>
+        <a href={config.map} target="_blank" rel="noopener noreferrer">
+          <MapPin size={15} aria-hidden="true" /> {address}
+        </a>
+      </li>
+      {from !== null && (
+        <li>
+          <Scissors size={15} aria-hidden="true" />{' '}
+          {t('Стрижки от {price}', { price: money(from, config.currency) })}
+        </li>
+      )}
+    </ul>
+  );
+}
+
+/** Why come here, in four short facts (replaces a second copy of the logo). */
+function Highlights({ config, services }: { config: Config; services?: Service[] }) {
+  const { t } = useT();
+  const from = cheapest(services);
+  const items = [
+    [Users, t('Мужской и женский зал'), t('Стрижки для всей семьи — от малышей до взрослых.')],
+    [
+      Sparkles,
+      services ? servicesCount(services.length, t) : t('Услуги'),
+      from === null
+        ? ''
+        : t('Цены от {price}. Окончательную стоимость мастер назовёт до начала работы.', {
+            price: money(from, config.currency),
+          }),
+    ],
+    [
+      CalendarClock,
+      t('Запись онлайн'),
+      t('Без регистрации: выберите время, подтвердим в WhatsApp.'),
+    ],
+    [Wallet, t('Удобная оплата'), t('Наличными или Kaspi QR в салоне.')],
+  ] as const;
+  return (
+    <ul className="highlights">
+      {items.map(([Icon, title, text]) => (
+        <li key={title}>
+          <span className="contact-icon">
+            <Icon size={20} aria-hidden="true" />
+          </span>
+          <h3>{title}</h3>
+          {text && <p>{text}</p>}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** The home page shows one hall at a time and its first services; the full list is on /services. */
+function HomeServices({ services, config }: { services: Service[]; config: Config }) {
+  const { t } = useT();
+  const groups = byCategory(services);
+  const [hall, setHall] = useState(0);
+  const group = groups[Math.min(hall, groups.length - 1)];
+  if (!group) return null;
+  const shown = group.items.slice(0, 6);
+  return (
+    <>
+      {groups.length > 1 && (
+        <div className="hall-tabs" role="tablist" aria-label={t('Залы')}>
+          {groups.map((g, i) => (
+            <button
+              key={g.category}
+              role="tab"
+              id={`hall-tab-${i}`}
+              aria-selected={i === hall}
+              aria-controls="hall-panel"
+              onClick={() => setHall(i)}
+            >
+              {t(g.category || 'Услуги')} <span>{g.items.length}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      <div id="hall-panel" role="tabpanel" aria-labelledby={`hall-tab-${hall}`}>
+        <ServiceRows services={shown.map((s) => ({ ...s, category: '' }))} config={config} />
+      </div>
+      {group.items.length > shown.length && (
+        <Link className="button secondary more-services" to="/services">
+          {t('Все услуги зала · {n}', { n: group.items.length })} <ArrowUpRight size={18} />
+        </Link>
+      )}
+    </>
+  );
+}
+
+/** On phones, once the first screen is scrolled away, booking stays one tap away. */
+function MobileCta({ config }: { config: Config }) {
+  const { t } = useT();
+  const [show, setShow] = useState(false);
+  const observer = useRef<IntersectionObserver | null>(null);
+  useEffect(() => {
+    const hero = document.querySelector('.hero');
+    if (!hero || !('IntersectionObserver' in window)) return;
+    observer.current = new IntersectionObserver(([entry]) => setShow(!entry.isIntersecting));
+    observer.current.observe(hero);
+    return () => observer.current?.disconnect();
+  }, []);
+  useEffect(() => {
+    document.body.classList.toggle('has-mobile-cta', show);
+    return () => document.body.classList.remove('has-mobile-cta');
+  }, [show]);
+  return (
+    <div className={`mobile-cta ${show ? 'show' : ''}`} aria-hidden={!show}>
+      <ButtonLink to="/book" tabIndex={show ? 0 : -1}>
+        {t('Записаться')}
+      </ButtonLink>
+      <WhatsAppLink
+        config={config}
+        className="button ghost"
+        text={t('Здравствуйте! Хочу записаться в салон «{name}».', { name: config.name })}
+        tabIndex={show ? 0 : -1}
+        aria-label={t('Написать в WhatsApp')}
+      >
+        {''}
+      </WhatsAppLink>
+    </div>
   );
 }
