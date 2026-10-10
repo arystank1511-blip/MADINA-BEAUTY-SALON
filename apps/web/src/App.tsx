@@ -15,6 +15,7 @@ import {
 import { Home, Catalog } from './pages/Home';
 import { Auth } from './pages/Auth';
 import { Book } from './pages/Book';
+import { LangSwitch, useT } from './i18n';
 const Admin = lazy(() => import('./pages/Admin').then((m) => ({ default: m.Admin })));
 const MasterDay = lazy(() => import('./pages/MasterDay').then((m) => ({ default: m.MasterDay })));
 function Gate({ children, admin = false }: { children: React.ReactNode; admin?: boolean }) {
@@ -39,6 +40,7 @@ export function App() {
   const [menu, setMenu] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const location = useLocation();
+  const { t } = useT();
   useEffect(() => {
     setMenu(false);
     if (location.hash) {
@@ -75,8 +77,9 @@ export function App() {
     return () => document.removeEventListener('keydown', close);
   }, [menu]);
   useEffect(() => {
-    if (settings.data) document.title = `${settings.data.name} · Парикмахерская в Зеренде`;
-  }, [settings.data]);
+    if (settings.data)
+      document.title = t('{name} · Парикмахерская в Зеренде', { name: settings.data.name });
+  }, [settings.data, t]);
   if (settings.isPending)
     return (
       <div className="container">
@@ -102,30 +105,32 @@ export function App() {
   return (
     <>
       <a className="skip-link" href="#main">
-        Перейти к содержимому
+        {t('Перейти к содержимому')}
       </a>
       <header>
         <div className="header-inner">
-          <Link to="/" className="logo" aria-label={`${config.name}, главная`}>
+          <Link to="/" className="logo" aria-label={t('{name}, главная', { name: config.name })}>
             <img src="/images/madina-logo-header.svg" alt="" />
           </Link>
-          <nav aria-label="Основная навигация" className={menu ? 'open' : ''}>
-            <Link to="/services">Услуги</Link>
-            <Link to="/#masters">Мастер</Link>
-            <Link to="/#about">О салоне</Link>
-            <Link to="/#contacts">Контакты</Link>
+          <nav aria-label={t('Основная навигация')} className={menu ? 'open' : ''}>
+            <Link to="/services">{t('Услуги')}</Link>
+            <Link to="/#masters">{t('Мастер')}</Link>
+            <Link to="/#about">{t('О салоне')}</Link>
+            <Link to="/#contacts">{t('Контакты')}</Link>
             {me.data?.role === 'ADMIN' && <Link to="/master">Мой день</Link>}
             {me.data?.role === 'ADMIN' && <Link to="/admin">Управление</Link>}
             {me.data && (
               <button className="nav-logout" onClick={() => void logout()}>
-                Выйти
+                {t('Выйти')}
               </button>
             )}
+            <LangSwitch className="in-menu" />
           </nav>
-          <ButtonLink to="/book">Записаться</ButtonLink>
+          <LangSwitch className="in-header" />
+          <ButtonLink to="/book">{t('Записаться')}</ButtonLink>
           <button
             className="menu-button"
-            aria-label={menu ? 'Закрыть меню' : 'Открыть меню'}
+            aria-label={menu ? t('Закрыть меню') : t('Открыть меню')}
             aria-expanded={menu}
             onClick={() => setMenu(!menu)}
             onKeyDown={(e) => {
@@ -182,16 +187,16 @@ export function App() {
             <img src="/images/madina-logo-header.svg" alt={config.name} />
           </Link>
           <p>
-            Парикмахерская «{config.name}».
+            {t('Парикмахерская «{name}».', { name: config.name })}
             <br />
-            {config.address}
+            {t(config.address)}
           </p>
         </div>
         <div className="footer-links">
-          <Link to="/services">Услуги</Link>
-          <Link to="/#masters">Мастер</Link>
+          <Link to="/services">{t('Услуги')}</Link>
+          <Link to="/#masters">{t('Мастер')}</Link>
           <Link to="/book">
-            Записаться <Arrow />
+            {t('Записаться')} <Arrow />
           </Link>
           <a href={`https://wa.me/${config.whatsapp}`} target="_blank" rel="noopener noreferrer">
             <WhatsAppIcon size={16} /> {phoneLabel(config.whatsapp)}
@@ -203,14 +208,15 @@ export function App() {
   );
 }
 function NotFound({ config }: { config: Config }) {
+  const { t } = useT();
   return (
     <section className="not-found">
       <Halftone id="404" />
       <div>
         <p className="error-number">404</p>
-        <h1>Страница не найдена</h1>
-        <p>Вернёмся на главную салона.</p>
-        <ButtonLink to="/">На главную {config.name}</ButtonLink>
+        <h1>{t('Страница не найдена')}</h1>
+        <p>{t('Вернёмся на главную салона.')}</p>
+        <ButtonLink to="/">{t('На главную {name}', { name: config.name })}</ButtonLink>
       </div>
     </section>
   );

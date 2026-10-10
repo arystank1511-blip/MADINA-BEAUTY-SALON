@@ -3098,3 +3098,28 @@ tr.clickable:hover td {
 .booking-page > .promo-banner {
   margin-bottom: 24px;
 }
+/* Language switch */
+.lang-switch {
+  min-height: 40px;
+  min-width: 52px;
+  padding: 0 12px;
+  border: 1px solid var(--interactive);
+  color: var(--text);
+  font-weight: 700;
+  font-size: 13px;
+}
+.lang-switch:hover {
+  border-color: var(--text);
+}
+/* On phones the switch lives in the menu, so the header keeps its room. */
+.lang-switch.in-menu {
+  display: none;
+}
+@media (max-width: 600px) {
+  .lang-switch.in-header {
+    display: none;
+  }
+  .header-inner nav.open .lang-switch.in-menu {
+    display: block;
+  }
+}

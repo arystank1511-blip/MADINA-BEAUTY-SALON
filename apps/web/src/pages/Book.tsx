@@ -24,11 +24,13 @@ import {
 import { Arrow, ButtonLink, ErrorBox, Loading, WhatsAppIcon, WhatsAppLink } from '../components';
 import { BirthdayInput } from '../clients';
 import { PromoBanner } from '../site';
+import { useT } from '../i18n';
 export function Book({ config, admin = false }: { config: Config; admin?: boolean }) {
   const [params, setParams] = useSearchParams(),
     services = useServices(),
     masters = useMasters(),
     client = useQueryClient();
+  const { t, lang, locale } = useT();
   const [error, setError] = useState<unknown>(null),
     [success, setSuccess] = useState<Appointment | null>(null),
     [customer, setCustomer] = useState(''),
@@ -111,7 +113,11 @@ export function Book({ config, admin = false }: { config: Config; admin?: boolea
       const fresh = await availability.refetch();
       if (fresh.error) throw fresh.error;
       if (!fresh.data?.slots.some((s) => s.startsAt === time))
-        throw new ApiError(409, 'SLOT_UNAVAILABLE', 'Это время уже занято. Выберите другой слот.');
+        throw new ApiError(
+          409,
+          'SLOT_UNAVAILABLE',
+          t('Это время уже занято. Выберите другой слот.'),
+        );
       return send<Appointment>(admin ? '/admin/appointments' : '/appointments', 'POST', {
         serviceId,
         masterId,
@@ -169,34 +175,34 @@ export function Book({ config, admin = false }: { config: Config; admin?: boolea
   });
   const summary = (
     <>
-      <p className="eyebrow">ВАША ЗАПИСЬ</p>
-      <h3>{service?.name || 'Начнём с услуги'}</h3>
+      <p className="eyebrow">{t('ВАША ЗАПИСЬ')}</p>
+      <h3>{service ? t(service.name) : t('Начнём с услуги')}</h3>
       <dl>
         <div>
-          <dt>Мастер</dt>
-          <dd>{master?.name || 'Не выбран'}</dd>
+          <dt>{t('Мастер')}</dt>
+          <dd>{master?.name || t('Не выбран')}</dd>
         </div>
         <div>
-          <dt>Дата</dt>
-          <dd>{dateLabel(date + 'T12:00:00Z', config.timezone)}</dd>
+          <dt>{t('Дата')}</dt>
+          <dd>{dateLabel(date + 'T12:00:00Z', config.timezone, locale)}</dd>
         </div>
         <div>
-          <dt>Время</dt>
-          <dd>{time ? timeLabel(time, config.timezone) : 'Не выбрано'}</dd>
+          <dt>{t('Время')}</dt>
+          <dd>{time ? timeLabel(time, config.timezone) : t('Не выбрано')}</dd>
         </div>
         <div>
-          <dt>Длительность</dt>
-          <dd>{service ? `${service.durationMinutes} мин` : '—'}</dd>
+          <dt>{t('Длительность')}</dt>
+          <dd>{service ? t('{n} мин', { n: service.durationMinutes }) : '—'}</dd>
         </div>
       </dl>
       <div className="total">
-        <span>Итого</span>
-        <strong>{service ? price(service, config.currency) : '—'}</strong>
+        <span>{t('Итого')}</span>
+        <strong>{service ? price(service, config.currency, lang) : '—'}</strong>
       </div>
       <p className="caption">
-        Все часы указаны по времени салона:
+        {t('Все часы указаны по времени салона:')}
         <br />
-        {config.timezone}. Оплата в салоне: {config.payment}.
+        {config.timezone}. {t('Оплата в салоне: {payment}.', { payment: t(config.payment) })}
       </p>
     </>
   );
@@ -206,21 +212,23 @@ export function Book({ config, admin = false }: { config: Config; admin?: boolea
         <span className="success-icon whatsapp-success">
           <WhatsAppIcon size={34} />
         </span>
-        <p className="eyebrow">ВРЕМЯ ЗАБРОНИРОВАНО</p>
-        <h1>Остался один шаг.</h1>
+        <p className="eyebrow">{t('ВРЕМЯ ЗАБРОНИРОВАНО')}</p>
+        <h1>{t('Остался один шаг.')}</h1>
         <p className="page-intro">
-          {service?.name}
-          {time && ` · ${dateLabel(time, config.timezone)}, ${timeLabel(time, config.timezone)}`}
+          {service && t(service.name)}
+          {time &&
+            ` · ${dateLabel(time, config.timezone, locale)}, ${timeLabel(time, config.timezone)}`}
           <br />
-          Мы держим это время для вас 3 часа. Отправьте сообщение в WhatsApp — мастер подтвердит
-          запись в ответ.
+          {t(
+            'Мы держим это время для вас 3 часа. Отправьте сообщение в WhatsApp — мастер подтвердит запись в ответ.',
+          )}
         </p>
         <div className="form-actions">
           <WhatsAppLink config={config} text={whatsappText}>
-            Отправить в WhatsApp
+            {t('Отправить в WhatsApp')}
           </WhatsAppLink>
           <ButtonLink to="/" secondary>
-            На главную
+            {t('На главную')}
           </ButtonLink>
         </div>
       </section>
@@ -248,16 +256,16 @@ export function Book({ config, admin = false }: { config: Config; admin?: boolea
     <section className="page booking-page">
       {!admin && <PromoBanner />}
       <p className="eyebrow">
-        {admin ? 'ЗАПИСЬ КЛИЕНТА' : 'ОНЛАЙН-ЗАПИСЬ'} / {config.name}
+        {admin ? 'ЗАПИСЬ КЛИЕНТА' : t('ОНЛАЙН-ЗАПИСЬ')} / {config.name}
       </p>
-      <h1>Время для себя.</h1>
-      <p className="page-intro">Выберите детали. Всё остальное оставьте нам.</p>
+      <h1>{t('Время для себя.')}</h1>
+      <p className="page-intro">{t('Выберите детали. Всё остальное оставьте нам.')}</p>
       <ol className="progress-steps">
         {['Услуга', 'Мастер', 'Дата и время', 'Подтверждение'].map((label, i) => (
           <li key={label} className={step === i + 1 ? 'active' : step > i + 1 ? 'done' : ''}>
             <button disabled={i + 1 > step} onClick={() => change({ step: String(i + 1) })}>
               <span>{step > i + 1 ? <Check size={16} /> : String(i + 1).padStart(2, '0')}</span>
-              {label}
+              {t(label)}
             </button>
           </li>
         ))}
@@ -269,14 +277,18 @@ export function Book({ config, admin = false }: { config: Config; admin?: boolea
             {step > 1 && (
               <button
                 className="icon-button"
-                aria-label="Назад"
+                aria-label={t('Назад')}
                 onClick={() => change({ step: String(step - 1) })}
               >
                 <ChevronLeft />
               </button>
             )}
             <h2>
-              {['Выберите услугу', 'Выберите мастера', 'Когда вам удобно?', 'Всё верно?'][step - 1]}
+              {t(
+                ['Выберите услугу', 'Выберите мастера', 'Когда вам удобно?', 'Всё верно?'][
+                  step - 1
+                ],
+              )}
             </h2>
           </div>
           {step === 1 &&
@@ -288,18 +300,18 @@ export function Book({ config, admin = false }: { config: Config; admin?: boolea
               <>
                 {pinnedMaster && (
                   <p>
-                    Услуги мастера {pinnedMaster.name}.{' '}
+                    {t('Услуги мастера {name}.', { name: pinnedMaster.name })}{' '}
                     <button
                       className="inline-link"
                       onClick={() => change({ pinned: undefined, master: undefined })}
                     >
-                      Показать все
+                      {t('Показать все')}
                     </button>
                   </p>
                 )}
                 {byCategory(availableServices).map((group) => (
                   <div className="choice-list" key={group.category}>
-                    {group.category && <h3 className="choice-group-title">{group.category}</h3>}
+                    {group.category && <h3 className="choice-group-title">{t(group.category)}</h3>}
                     {group.items.map((s) => (
                       <button
                         className={`choice ${serviceId === s.id ? 'selected' : ''}`}
@@ -320,12 +332,12 @@ export function Book({ config, admin = false }: { config: Config; admin?: boolea
                         }}
                       >
                         <div>
-                          <h3>{s.name}</h3>
-                          {s.description && <p>{s.description}</p>}
-                          <span>{s.durationMinutes} мин</span>
+                          <h3>{t(s.name)}</h3>
+                          {s.description && <p>{t(s.description)}</p>}
+                          <span>{t('{n} мин', { n: s.durationMinutes })}</span>
                         </div>
                         <strong>
-                          {price(s, config.currency)}
+                          {price(s, config.currency, lang)}
                           {serviceId === s.id ? <Check size={18} /> : <Arrow />}
                         </strong>
                       </button>
@@ -340,7 +352,7 @@ export function Book({ config, admin = false }: { config: Config; admin?: boolea
             ) : masters.error ? (
               <ErrorBox error={masters.error} retry={() => void masters.refetch()} />
             ) : !service ? (
-              <ButtonLink to="/book">Выбрать услугу</ButtonLink>
+              <ButtonLink to="/book">{t('Выбрать услугу')}</ButtonLink>
             ) : (
               <div className="choice-list">
                 {availableMasters.map((m) => (
@@ -354,20 +366,20 @@ export function Book({ config, admin = false }: { config: Config; admin?: boolea
                   >
                     <div>
                       <h3>{m.name}</h3>
-                      <p>{m.description}</p>
+                      <p>{t(m.description)}</p>
                     </div>
                     {masterId === m.id ? <Check /> : <Arrow />}
                   </button>
                 ))}
                 {availableMasters.length === 0 && (
-                  <p>Для этой услуги пока нет доступных мастеров. Выберите другую услугу.</p>
+                  <p>{t('Для этой услуги пока нет доступных мастеров. Выберите другую услугу.')}</p>
                 )}
               </div>
             ))}
           {step === 3 && (
             <>
               <label className="date-picker">
-                Дата посещения
+                {t('Дата посещения')}
                 <input
                   type="date"
                   min={todayIn(config.timezone)}
@@ -381,16 +393,16 @@ export function Book({ config, admin = false }: { config: Config; admin?: boolea
                   }}
                 />
               </label>
-              <p className="caption">Время салона · {config.timezone}</p>
+              <p className="caption">{t('Время салона · {zone}', { zone: config.timezone })}</p>
               {!service || !master ? (
-                <p>Сначала выберите услугу и мастера.</p>
+                <p>{t('Сначала выберите услугу и мастера.')}</p>
               ) : availability.isFetching ? (
                 <Loading />
               ) : availability.error ? (
                 <ErrorBox error={availability.error} retry={() => void availability.refetch()} />
               ) : availability.data?.slots.length ? (
                 <>
-                  <div className="slots" aria-label="Свободное время">
+                  <div className="slots" aria-label={t('Свободное время')}>
                     {availability.data.slots.map((s) => (
                       <button
                         aria-pressed={time === s.startsAt}
@@ -406,19 +418,19 @@ export function Book({ config, admin = false }: { config: Config; admin?: boolea
                     ))}
                   </div>
                   <button className="button" disabled={!time} onClick={() => change({ step: '4' })}>
-                    Продолжить <Arrow />
+                    {t('Продолжить')} <Arrow />
                   </button>
                 </>
               ) : (
                 <div className="empty">
-                  <h3>На эту дату свободного времени нет</h3>
-                  <p>Попробуйте другой день или выберите другого мастера.</p>
+                  <h3>{t('На эту дату свободного времени нет')}</h3>
+                  <p>{t('Попробуйте другой день или выберите другого мастера.')}</p>
                   <button
                     className="button secondary"
                     disabled={date >= addDays(todayIn(config.timezone), 59)}
                     onClick={() => change({ date: addDays(date, 1), time: undefined })}
                   >
-                    Следующий день <Arrow />
+                    {t('Следующий день')} <Arrow />
                   </button>
                 </div>
               )}
@@ -427,16 +439,16 @@ export function Book({ config, admin = false }: { config: Config; admin?: boolea
           {step === 4 && (
             <>
               <div className="review">
-                <h3>{service?.name}</h3>
+                <h3>{service && t(service.name)}</h3>
                 <p>
-                  {master?.name} · {service?.durationMinutes} мин
+                  {master?.name} · {t('{n} мин', { n: service?.durationMinutes ?? 0 })}
                 </p>
                 <p>
                   {time
-                    ? `${dateLabel(time, config.timezone)} · ${timeLabel(time, config.timezone)}`
-                    : 'Выберите время на предыдущем шаге.'}
+                    ? `${dateLabel(time, config.timezone, locale)} · ${timeLabel(time, config.timezone)}`
+                    : t('Выберите время на предыдущем шаге.')}
                 </p>
-                <strong>{service && price(service, config.currency)}</strong>
+                <strong>{service && price(service, config.currency, lang)}</strong>
               </div>
               {admin && (
                 <>
@@ -470,9 +482,11 @@ export function Book({ config, admin = false }: { config: Config; admin?: boolea
               )}
               {!admin ? (
                 <div className="login-prompt whatsapp-prompt">
-                  <h3>Как к вам обращаться?</h3>
+                  <h3>{t('Как к вам обращаться?')}</h3>
                   <p>
-                    Мы придержим это время, а подтвердим запись в WhatsApp. Регистрация не нужна.
+                    {t(
+                      'Мы придержим это время, а подтвердим запись в WhatsApp. Регистрация не нужна.',
+                    )}
                   </p>
                   <form
                     onSubmit={(e) => {
@@ -482,7 +496,7 @@ export function Book({ config, admin = false }: { config: Config; admin?: boolea
                     }}
                   >
                     <label>
-                      Ваше имя
+                      {t('Ваше имя')}
                       <input
                         autoComplete="given-name"
                         required
@@ -493,7 +507,7 @@ export function Book({ config, admin = false }: { config: Config; admin?: boolea
                       />
                     </label>
                     <label>
-                      Телефон (WhatsApp)
+                      {t('Телефон (WhatsApp)')}
                       <input
                         type="tel"
                         autoComplete="tel"
@@ -508,7 +522,7 @@ export function Book({ config, admin = false }: { config: Config; admin?: boolea
                       />
                     </label>
                     <BirthdayInput
-                      label="День рождения — по желанию, пришлём скидку"
+                      label={t('День рождения — по желанию, пришлём скидку')}
                       value={birthday}
                       onChange={setBirthday}
                     />
@@ -517,7 +531,7 @@ export function Book({ config, admin = false }: { config: Config; admin?: boolea
                       disabled={!time || !master || !service || request.isPending}
                     >
                       <WhatsAppIcon />
-                      {request.isPending ? 'Бронируем…' : 'Записаться'}
+                      {request.isPending ? t('Бронируем…') : t('Записаться')}
                     </button>
                   </form>
                 </div>
@@ -547,7 +561,9 @@ export function Book({ config, admin = false }: { config: Config; admin?: boolea
         <aside className="booking-summary">
           <div className="desktop-summary">{summary}</div>
           <details className="mobile-summary">
-            <summary>Детали записи {service && price(service, config.currency)}</summary>
+            <summary>
+              {t('Детали записи')} {service && price(service, config.currency, lang)}
+            </summary>
             {summary}
           </details>
         </aside>

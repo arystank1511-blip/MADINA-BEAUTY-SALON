@@ -21,81 +21,86 @@ import {
   WhatsAppLink,
 } from '../components';
 import { Gallery, PromoBanner, useGallery } from '../site';
+import { useT } from '../i18n';
 export function Home({ config }: { config: Config }) {
   const services = useServices(),
     masters = useMasters(),
     gallery = useGallery();
+  const { t } = useT();
   return (
     <>
       <PromoBanner />
       <section className="hero">
         <Halftone id="hero" />
         <div className="hero-top">
-          <span>ПАРИКМАХЕРСКАЯ «МАДИНА»</span>
-          <span>С. ЗЕРЕНДА</span>
+          <span>{t('ПАРИКМАХЕРСКАЯ «{name}»', { name: config.name.toUpperCase() })}</span>
+          <span>{t('С. ЗЕРЕНДА')}</span>
         </div>
         <div className="hero-body">
           <h1 className="hero-logo">
             <img src="/images/madina-logo-header.svg" alt={config.name} />
           </h1>
           <h2>
-            Стрижки. Цвет.
+            {t('Стрижки. Цвет.')}
             <br />
-            Ваш характер.
+            {t('Ваш характер.')}
           </h2>
           <p>
-            Выберите услугу и удобное время,
-            <br className="mobile-break" /> а подтвердим в WhatsApp.
+            {t('Выберите услугу и удобное время,')}
+            <br className="mobile-break" /> {t('а подтвердим в WhatsApp.')}
           </p>
           <div className="hero-actions">
-            <ButtonLink to="/book">Записаться</ButtonLink>
+            <ButtonLink to="/book">{t('Записаться')}</ButtonLink>
             <WhatsAppLink
               config={config}
               className="button ghost"
-              text={`Здравствуйте! Хочу записаться в салон «${config.name}».`}
+              text={t('Здравствуйте! Хочу записаться в салон «{name}».', { name: config.name })}
             >
               WhatsApp
             </WhatsAppLink>
           </div>
         </div>
         <div className="hero-bottom">
-          <span>ВАША ИНДИВИДУАЛЬНОСТЬ. НАША РАБОТА.</span>
-          <a href="#about" aria-label="Подробнее о салоне">
-            Листайте вниз <span className="scroll-cue">↓</span>
+          <span>{t('ВАША ИНДИВИДУАЛЬНОСТЬ. НАША РАБОТА.')}</span>
+          <a href="#about" aria-label={t('Подробнее о салоне')}>
+            {t('Листайте вниз')} <span className="scroll-cue">↓</span>
           </a>
         </div>
       </section>
-      <Section id="about" label="О САЛОНЕ">
+      <Section id="about" label={t('О САЛОНЕ')}>
         <h2 className="statement">
-          Красота
+          {t('Красота')}
           <br />
-          начинается <span>с вас.</span>
+          {t('начинается')} <span>{t('с вас.')}</span>
         </h2>
         <div className="about-copy">
           <p>
-            Работаем с тем, что делает вас собой: текстурой волос, привычками и настроением. Находим
-            стрижку, цвет и уход, с которыми комфортно каждый день.
+            {t(
+              'Работаем с тем, что делает вас собой: текстурой волос, привычками и настроением. Находим стрижку, цвет и уход, с которыми комфортно каждый день.',
+            )}
           </p>
-          <p>От первого разговора до последнего штриха. Внимательно, спокойно и без лишнего.</p>
+          <p>
+            {t('От первого разговора до последнего штриха. Внимательно, спокойно и без лишнего.')}
+          </p>
         </div>
         <div className="interior brand-panel">
           <Halftone id="about" />
           <img
             src="/images/madina-logo.svg"
-            alt={`Парикмахерская «${config.name}»`}
+            alt={t('Парикмахерская «{name}»', { name: config.name })}
             loading="lazy"
           />
           <p className="brand-panel-tags" aria-hidden="true">
-            Мужской зал · Женский зал · Стрижки · Покраска · Укладки
+            {t('Мужской зал · Женский зал · Стрижки · Покраска · Укладки')}
           </p>
-          <span>ПРОСТРАНСТВО ДЛЯ ПЕРЕМЕН ↗</span>
+          <span>{t('ПРОСТРАНСТВО ДЛЯ ПЕРЕМЕН ↗')}</span>
         </div>
       </Section>
-      <Section id="services" label="УСЛУГИ">
+      <Section id="services" label={t('УСЛУГИ')}>
         <div className="section-heading">
-          <h2>Выберите свой образ.</h2>
+          <h2>{t('Выберите свой образ.')}</h2>
           <Link className="text-button" to="/services">
-            Все услуги <ArrowUpRight size={18} />
+            {t('Все услуги')} <ArrowUpRight size={18} />
           </Link>
         </div>
         {services.isPending ? (
@@ -106,9 +111,9 @@ export function Home({ config }: { config: Config }) {
           <ServiceRows services={services.data || []} config={config} />
         )}
       </Section>
-      <Section id="masters" label="МАСТЕР">
-        <h2>В хороших руках.</h2>
-        <p className="section-intro">Внимание к деталям в каждой работе.</p>
+      <Section id="masters" label={t('МАСТЕР')}>
+        <h2>{t('В хороших руках.')}</h2>
+        <p className="section-intro">{t('Внимание к деталям в каждой работе.')}</p>
         {masters.isPending ? (
           <Loading />
         ) : masters.error ? (
@@ -119,7 +124,11 @@ export function Home({ config }: { config: Config }) {
               <article className="master-card" key={m.id}>
                 <div className="portrait">
                   {m.avatarUrl ? (
-                    <img src={m.avatarUrl} alt={`Мастер ${m.name}`} loading="lazy" />
+                    <img
+                      src={m.avatarUrl}
+                      alt={t('Мастер {name}', { name: m.name })}
+                      loading="lazy"
+                    />
                   ) : (
                     <div className="master-placeholder" aria-hidden="true">
                       <img src="/images/madina-logo.svg" alt="" loading="lazy" />
@@ -131,34 +140,34 @@ export function Home({ config }: { config: Config }) {
                   <h3>{m.name}</h3>
                   <Link
                     className="icon-button"
-                    aria-label={`Выбрать мастера ${m.name}`}
+                    aria-label={t('Выбрать мастера {name}', { name: m.name })}
                     to={`/book?master=${m.id}&pinned=${m.id}`}
                   >
                     <ArrowUpRight />
                   </Link>
                 </div>
-                <p>{m.description}</p>
+                <p>{t(m.description)}</p>
                 <p className="master-services">
-                  {m.services.map((s) => s.service.name).join(' · ')}
+                  {m.services.map((s) => t(s.service.name)).join(' · ')}
                 </p>
               </article>
             ))}
           </div>
         )}
-        <p className="caption">Выберите услугу и удобное время для записи.</p>
+        <p className="caption">{t('Выберите услугу и удобное время для записи.')}</p>
       </Section>
       {!!gallery.data?.length && (
-        <Section id="works" label="РАБОТЫ">
-          <h2>Наши работы.</h2>
-          <p className="section-intro">Фото из салона — до и после.</p>
+        <Section id="works" label={t('РАБОТЫ')}>
+          <h2>{t('Наши работы.')}</h2>
+          <p className="section-intro">{t('Фото из салона — до и после.')}</p>
           <Gallery photos={gallery.data} />
         </Section>
       )}
-      <Section id="how" label="КАК ЗАПИСАТЬСЯ">
+      <Section id="how" label={t('КАК ЗАПИСАТЬСЯ')}>
         <h2>
-          Ваше время.
+          {t('Ваше время.')}
           <br />
-          Всего четыре шага.
+          {t('Всего четыре шага.')}
         </h2>
         <div className="steps-grid">
           {(
@@ -176,24 +185,25 @@ export function Home({ config }: { config: Config }) {
                   <Icon size={22} />
                 </span>
               </span>
-              <h3>{title}</h3>
-              <p>{text}</p>
+              <h3>{t(title)}</h3>
+              <p>{t(text)}</p>
             </div>
           ))}
         </div>
       </Section>
-      <Section id="contacts" label="КОНТАКТЫ">
+      <Section id="contacts" label={t('КОНТАКТЫ')}>
         <h2>
-          Место для новой вас.
-          <br />И нового вас.
+          {t('Место для новой вас.')}
+          <br />
+          {t('И нового вас.')}
         </h2>
         <div className="contact-grid">
           <div>
             <span className="contact-icon">
               <MapPin size={20} />
             </span>
-            <span>АДРЕС</span>
-            <p>{config.address}</p>
+            <span>{t('АДРЕС')}</span>
+            <p>{t(config.address)}</p>
             <small>
               <a
                 className="contact-link"
@@ -201,7 +211,7 @@ export function Home({ config }: { config: Config }) {
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                Открыть в 2ГИС ↗
+                {t('Открыть в 2ГИС ↗')}
               </a>
             </small>
           </div>
@@ -209,9 +219,9 @@ export function Home({ config }: { config: Config }) {
             <span className="contact-icon">
               <Clock size={20} />
             </span>
-            <span>ВРЕМЯ РАБОТЫ</span>
-            <p>{config.hours}</p>
-            <small>Запись с 10:00</small>
+            <span>{t('ВРЕМЯ РАБОТЫ')}</span>
+            <p>{t(config.hours)}</p>
+            <small>{t('Запись с 10:00')}</small>
           </div>
           <div>
             <span className="contact-icon">
@@ -228,15 +238,15 @@ export function Home({ config }: { config: Config }) {
                 {phoneLabel(config.whatsapp)}
               </a>
             </p>
-            <small>Запись и вопросы — в чате</small>
+            <small>{t('Запись и вопросы — в чате')}</small>
           </div>
           <div>
             <span className="contact-icon">
               <Wallet size={20} />
             </span>
-            <span>ОПЛАТА</span>
-            <p>{config.payment}</p>
-            <small>Оплата в салоне после услуги</small>
+            <span>{t('ОПЛАТА')}</span>
+            <p>{t(config.payment)}</p>
+            <small>{t('Оплата в салоне после услуги')}</small>
           </div>
         </div>
       </Section>
@@ -244,10 +254,11 @@ export function Home({ config }: { config: Config }) {
         <Halftone id="closing" />
         <div>
           <p>
-            <Sparkles size={14} className="sparkle" aria-hidden="true" /> НАЧНЁМ С ВАШЕГО ЖЕЛАНИЯ
+            <Sparkles size={14} className="sparkle" aria-hidden="true" />{' '}
+            {t('НАЧНЁМ С ВАШЕГО ЖЕЛАНИЯ')}
           </p>
-          <h2>Время перемен.</h2>
-          <ButtonLink to="/book">Выбрать время</ButtonLink>
+          <h2>{t('Время перемен.')}</h2>
+          <ButtonLink to="/book">{t('Выбрать время')}</ButtonLink>
           <span className="closing-word" aria-hidden="true">
             {config.name}
           </span>
@@ -258,15 +269,16 @@ export function Home({ config }: { config: Config }) {
 }
 export function Catalog({ config }: { config: Config }) {
   const services = useServices();
+  const { t } = useT();
   return (
     <section className="page">
-      <p className="eyebrow">УСЛУГИ / {config.name}</p>
+      <p className="eyebrow">{t('УСЛУГИ / {name}', { name: config.name })}</p>
       <h1>
-        Ваша следующая
+        {t('Ваша следующая')}
         <br />
-        <span className="muted">любимая стрижка.</span>
+        <span className="muted">{t('любимая стрижка.')}</span>
       </h1>
-      <p className="page-intro">Прозрачная стоимость. Время только для вас.</p>
+      <p className="page-intro">{t('Прозрачная стоимость. Время только для вас.')}</p>
       {services.isPending ? (
         <Loading />
       ) : services.error ? (
