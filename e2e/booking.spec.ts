@@ -15,6 +15,8 @@ async function pickSlot(page: Page, daysAhead: number) {
   await expect(page.getByRole('heading', { name: 'Когда вам удобно?' })).toBeVisible();
   const date = new Date();
   date.setUTCDate(date.getUTCDate() + daysAhead);
+  // Sunday is the salon's day off: no slots.
+  if (date.getUTCDay() === 0) date.setUTCDate(date.getUTCDate() + 1);
   const day = date.toISOString().slice(0, 10);
   await page.getByLabel('Дата посещения').fill(day);
   await expect(page.locator('.slots button').first()).toBeVisible();
@@ -60,21 +62,30 @@ test('guest books through WhatsApp without an account; responsive screenshots', 
   await page.getByRole('button', { name: 'Продолжить', exact: true }).click();
   await page.getByLabel('Ваше имя').fill('Анна');
   await page.getByLabel('Телефон (WhatsApp)').fill('+7 701 000 00 00');
+  // «Записаться» holds the time and goes straight to WhatsApp with the ready message.
+  await page.route('https://wa.me/**', (route) =>
+    route.fulfill({ contentType: 'text/html', body: '<p>WhatsApp</p>' }),
+  );
   const request = page.waitForResponse('**/api/v1/booking-requests');
   await page.getByRole('button', { name: 'Записаться', exact: true }).click();
   const response = await request;
   expect(response.status()).toBe(201);
   expect(response.request().postDataJSON()).toMatchObject({ name: 'Анна' });
-  await expect(page.getByRole('heading', { name: 'Остался один шаг.' })).toBeVisible();
-  const href =
-    (await page.getByRole('link', { name: 'Отправить в WhatsApp' }).getAttribute('href')) || '';
+  await page.waitForURL('https://wa.me/**');
+  const href = page.url();
   expect(href.startsWith('https://wa.me/77767296558?text=')).toBe(true);
-  const text = decodeURIComponent(href.split('?text=')[1]);
+  // Coming back from WhatsApp shows the confirmation, not the form again.
+  await page.goBack();
+  await expect(page.getByRole('heading', { name: 'Остался один шаг.' })).toBeVisible();
+  const text = decodeURIComponent(new URL(href).searchParams.get('text') ?? '');
   expect(text).toContain('Мужская стрижка');
   expect(text).toContain('Нургуль');
   expect(text).toContain('Меня зовут Анна.');
   // The request holds the slot: it is no longer offered to the next visitor.
-  const { id, startsAt } = await response.json();
+  const stored = await page.evaluate(() => sessionStorage.getItem('booking-sent'));
+  const { id, startsAt } = (
+    JSON.parse(stored || '{}') as { visits: { id: string; startsAt: string }[] }
+  ).visits[0];
   await page.goto('/book');
   await pickSlot(page, 5);
   const held = new Intl.DateTimeFormat('ru-RU', {

@@ -227,6 +227,27 @@ export class PublicController {
     visits[0] = { ...visits[0], ...extra };
     return visits;
   }
+  @Get('hours')
+  @ApiOperation({
+    summary: 'Часы работы салона по дням недели (1 — понедельник); дня нет — выходной',
+  })
+  async hours() {
+    const rows = await this.db.workingHours.findMany({
+      where: { master: { isActive: true } },
+      select: { weekday: true, startTime: true, endTime: true },
+    });
+    // The salon is open while any master works: earliest start and latest end of each day.
+    const days = new Map<number, { weekday: number; start: string; end: string }>();
+    for (const r of rows) {
+      const d = days.get(r.weekday);
+      if (!d) days.set(r.weekday, { weekday: r.weekday, start: r.startTime, end: r.endTime });
+      else {
+        if (r.startTime < d.start) d.start = r.startTime;
+        if (r.endTime > d.end) d.end = r.endTime;
+      }
+    }
+    return { days: [...days.values()].sort((a, b) => a.weekday - b.weekday) };
+  }
   @Get('offers')
   @ApiOperation({
     summary:

@@ -3302,6 +3302,12 @@ tr.clickable:hover td {
 /* A thin red frame offset behind the portrait. */
 .master-grid.single .portrait {
   overflow: visible;
+  /* Room for the offset frame inside the column, so nothing sticks out on a phone. */
+  margin: 0 14px 14px 0;
+}
+/* The frame shows the photo is not clipped, so it must not grow past it either. */
+.master-grid.single .master-card:hover .portrait img {
+  transform: none;
 }
 .master-grid.single .portrait::before {
   content: '';
