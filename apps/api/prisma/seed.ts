@@ -100,15 +100,16 @@ async function seed() {
         description: m[1],
         avatarUrl: m[2],
         services: { create: m[3].map((n) => ({ serviceId: id(n) })) },
+        // Monday to Saturday; Sunday is the day off.
         workingHours: {
-          create: Array.from({ length: 7 }, (_, day) => ({
+          create: Array.from({ length: 6 }, (_, day) => ({
             weekday: day + 1,
             startTime: '10:00',
             endTime: '18:00',
           })),
         },
         breaks: {
-          create: Array.from({ length: 7 }, (_, day) => ({
+          create: Array.from({ length: 6 }, (_, day) => ({
             weekday: day + 1,
             startTime: '13:00',
             endTime: '14:00',

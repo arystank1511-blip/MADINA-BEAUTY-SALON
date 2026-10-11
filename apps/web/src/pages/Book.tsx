@@ -20,13 +20,25 @@ import {
   User,
   useMasters,
   useServices,
+  whatsappLink,
 } from '../api';
 import { Arrow, ButtonLink, ErrorBox, Loading, WhatsAppIcon, WhatsAppLink } from '../components';
-import { BirthdayInput } from '../clients';
 import { PromoBanner, useOffers } from '../site';
 import { useT } from '../i18n';
+const SENT_KEY = 'booking-sent';
+/** The confirmation after returning from WhatsApp (?sent=1), so the form is not shown again. */
+function restoreSent(): Sent | null {
+  if (!new URLSearchParams(location.search).has('sent')) return null;
+  try {
+    return JSON.parse(sessionStorage.getItem(SENT_KEY) || 'null') as Sent | null;
+  } catch {
+    return null;
+  }
+}
 interface Sent {
   manageUrl?: string;
+  /** Who booked; kept so the WhatsApp text survives coming back from WhatsApp. */
+  name?: string;
   visits?: { id: string; name: string; serviceName: string; startsAt: string; manageUrl: string }[];
 }
 const SOURCE_OPTIONS = [
@@ -49,8 +61,7 @@ export function Book({ config, admin = false }: { config: Config; admin?: boolea
     [customer, setCustomer] = useState(''),
     [guestName, setGuestName] = useState(''),
     [guestPhone, setGuestPhone] = useState(''),
-    [birthday, setBirthday] = useState(''),
-    [sent, setSent] = useState<Sent | null>(null),
+    [sent, setSent] = useState<Sent | null>(restoreSent),
     [family, setFamily] = useState<{ name: string; serviceId: string }[]>([]),
     [source, setSource] = useState(''),
     [referrer, setReferrer] = useState('');
@@ -156,26 +167,32 @@ export function Book({ config, admin = false }: { config: Config; admin?: boolea
         void client.invalidateQueries({ queryKey: ['me'] });
     },
   });
+  const textFor = (sent: Sent | null) => {
+    const familyVisits = sent?.visits && sent.visits.length > 1 ? sent.visits : null;
+    const name = (sent?.name ?? guestName).trim();
+    return [
+      `Здравствуйте! Хочу записаться в салон «${config.name}».`,
+      ...(familyVisits
+        ? [
+            `Нас ${familyVisits.length}, ${dateLabel(familyVisits[0].startsAt, config.timezone)}:`,
+            ...familyVisits.map(
+              (v) => `${timeLabel(v.startsAt, config.timezone)} — ${v.name}: ${v.serviceName}`,
+            ),
+          ]
+        : [
+            service &&
+              `Услуга: ${service.name}${service.category ? `, ${service.category.toLowerCase()}` : ''} (${price(service, config.currency)})`,
+            time &&
+              `Время: ${dateLabel(time, config.timezone)}, ${timeLabel(time, config.timezone)}`,
+          ]),
+      master && `Мастер: ${master.name}`,
+      name && `Меня зовут ${name}.`,
+    ]
+      .filter(Boolean)
+      .join('\n');
+  };
   const familyVisits = sent?.visits && sent.visits.length > 1 ? sent.visits : null;
-  const whatsappText = [
-    `Здравствуйте! Хочу записаться в салон «${config.name}».`,
-    ...(familyVisits
-      ? [
-          `Нас ${familyVisits.length}, ${dateLabel(familyVisits[0].startsAt, config.timezone)}:`,
-          ...familyVisits.map(
-            (v) => `${timeLabel(v.startsAt, config.timezone)} — ${v.name}: ${v.serviceName}`,
-          ),
-        ]
-      : [
-          service &&
-            `Услуга: ${service.name}${service.category ? `, ${service.category.toLowerCase()}` : ''} (${price(service, config.currency)})`,
-          time && `Время: ${dateLabel(time, config.timezone)}, ${timeLabel(time, config.timezone)}`,
-        ]),
-    master && `Мастер: ${master.name}`,
-    guestName.trim() && `Меня зовут ${guestName.trim()}.`,
-  ]
-    .filter(Boolean)
-    .join('\n');
+  const whatsappText = textFor(sent);
   const familyServices =
     services.data?.filter((s) => master?.services.some((ms) => ms.serviceId === s.id)) ?? [];
   // The request holds the slot for the master; WhatsApp is how the client confirms it.
@@ -187,7 +204,6 @@ export function Book({ config, admin = false }: { config: Config; admin?: boolea
         startsAt: time,
         name: guestName.trim(),
         phone: guestPhone.trim(),
-        ...(birthday ? { birthday } : {}),
         ...(source ? { source } : {}),
         ...(referrer.trim() && offers.data?.referral ? { referrerPhone: referrer.trim() } : {}),
         ...(family.length
@@ -195,8 +211,18 @@ export function Book({ config, admin = false }: { config: Config; admin?: boolea
           : {}),
       }),
     onSuccess: (r) => {
-      setSent(r);
+      const done = { ...r, name: guestName.trim() };
+      setSent(done);
       void client.invalidateQueries({ queryKey: ['availability'] });
+      // Keep the confirmation for when the client comes back from WhatsApp.
+      try {
+        sessionStorage.setItem(SENT_KEY, JSON.stringify(done));
+      } catch {
+        // Private mode: the WhatsApp button on the confirmation still works.
+      }
+      change({ sent: '1' });
+      // Straight to WhatsApp with the ready message: the master confirms there.
+      window.location.assign(whatsappLink(config, textFor(done)));
     },
     onError: (e) => {
       setError(e);
@@ -569,15 +595,6 @@ export function Book({ config, admin = false }: { config: Config; admin?: boolea
                         onChange={(e) => setGuestPhone(e.target.value)}
                       />
                     </label>
-                    <BirthdayInput
-                      label={
-                        offers.data?.birthdayDiscount
-                          ? t('День рождения — по желанию, пришлём скидку')
-                          : t('День рождения — по желанию, поздравим')
-                      }
-                      value={birthday}
-                      onChange={setBirthday}
-                    />
                     <fieldset className="family">
                       <legend>{t('Записать вместе со мной')}</legend>
                       <p className="caption">
