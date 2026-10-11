@@ -19,6 +19,8 @@ const Book = lazy(() => import('./pages/Book').then((m) => ({ default: m.Book })
 const Auth = lazy(() => import('./pages/Auth').then((m) => ({ default: m.Auth })));
 const Admin = lazy(() => import('./pages/Admin').then((m) => ({ default: m.Admin })));
 const Visit = lazy(() => import('./pages/Visit').then((m) => ({ default: m.Visit })));
+const Rate = lazy(() => import('./pages/Rate').then((m) => ({ default: m.Rate })));
+const Poster = lazy(() => import('./pages/Poster').then((m) => ({ default: m.Poster })));
 const Gift = lazy(() => import('./pages/Gift').then((m) => ({ default: m.Gift })));
 const MasterDay = lazy(() => import('./pages/MasterDay').then((m) => ({ default: m.MasterDay })));
 /** `admin`: owner only; `staff`: owner or master («Мой день»). */
@@ -194,6 +196,24 @@ export function App() {
               <Suspense fallback={<Loading />}>
                 <Visit config={config} />
               </Suspense>
+            }
+          />
+          <Route
+            path="/r/:ref"
+            element={
+              <Suspense fallback={<Loading />}>
+                <Rate config={config} />
+              </Suspense>
+            }
+          />
+          <Route
+            path="/poster"
+            element={
+              <Gate admin>
+                <Suspense fallback={<Loading />}>
+                  <Poster config={config} />
+                </Suspense>
+              </Gate>
             }
           />
           <Route

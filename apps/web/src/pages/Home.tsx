@@ -150,24 +150,53 @@ export function Home({ config }: { config: Config }) {
                       <img src="/images/madina-logo.svg" alt="" loading="lazy" />
                     </div>
                   )}
-                  <span>0{i + 1}</span>
+                  {masters.data.length > 1 && <span>0{i + 1}</span>}
                 </div>
                 <div className="master-info">
-                  <div className="master-title">
-                    <h3>{m.name}</h3>
-                  </div>
-                  <p>{t(m.description)}</p>
+                  <p className="master-eyebrow">{t('МАСТЕР САЛОНА')}</p>
+                  <h3 className="master-name">{m.name}</h3>
+                  <RatingBadge />
+                  {m.description && <p className="master-lead">{t(m.description)}</p>}
+                  <dl className="master-facts">
+                    <div>
+                      <dt>{t('Услуг')}</dt>
+                      <dd>{m.services.length}</dd>
+                    </div>
+                    <div>
+                      <dt>{t('Залы')}</dt>
+                      <dd>
+                        {new Set(m.services.map((s) => s.service.category).filter(Boolean)).size ||
+                          1}
+                      </dd>
+                    </div>
+                    {cheapest(m.services.map((s) => s.service)) !== null && (
+                      <div>
+                        <dt>{t('Цены от')}</dt>
+                        <dd>
+                          {money(cheapest(m.services.map((s) => s.service))!, config.currency)}
+                        </dd>
+                      </div>
+                    )}
+                  </dl>
                   <ul className="chips" aria-label={t('Что делает мастер')}>
                     {[...new Set(m.services.map((s) => s.service.category).filter(Boolean))].map(
                       (c) => (
                         <li key={c}>{t(c)}</li>
                       ),
                     )}
-                    <li>{servicesCount(m.services.length, t)}</li>
                   </ul>
-                  <ButtonLink to={`/book?master=${m.id}&pinned=${m.id}`}>
-                    {t('Записаться к {name}', { name: m.name })}
-                  </ButtonLink>
+                  <div className="master-actions">
+                    <ButtonLink to={`/book?master=${m.id}&pinned=${m.id}`}>
+                      {t('Записаться к {name}', { name: m.name })}
+                    </ButtonLink>
+                    <WhatsAppLink
+                      config={config}
+                      className="button ghost"
+                      text={t('Здравствуйте! Хочу задать вопрос мастеру {name}.', { name: m.name })}
+                    >
+                      {t('Задать вопрос')}
+                    </WhatsAppLink>
+                  </div>
                 </div>
               </article>
             ))}
@@ -537,16 +566,77 @@ function PhotoPrice({ config }: { config: Config }) {
 }
 
 /** Reviews the owner added in the admin; hidden until there are any. */
-function Reviews() {
-  const { t } = useT();
-  const q = useQuery({
+function useReviews() {
+  return useQuery({
     queryKey: ['reviews'],
     queryFn: () =>
-      api<{ reviews: { id: string; name: string; text: string; rating: number }[]; url: string }>(
-        '/reviews',
-      ),
+      api<{
+        reviews: { id: string; name: string; text: string; rating: number }[];
+        url: string;
+        rating: { avg: number; count: number } | null;
+      }>('/reviews'),
     staleTime: 5 * 60000,
   });
+}
+
+/** «★ 4,9 · 23 оценки» next to the master's name; leads to the reviews. */
+function RatingBadge() {
+  const { t, lang } = useT();
+  const q = useReviews();
+  const r = q.data?.rating;
+  if (!r) return null;
+  const n = r.count % 100,
+    one = n % 10;
+  const word =
+    lang === 'kk'
+      ? t('баға')
+      : one === 1 && n !== 11
+        ? 'оценка'
+        : one >= 2 && one <= 4 && (n < 12 || n > 14)
+          ? 'оценки'
+          : 'оценок';
+  const label = (
+    <>
+      <span className="rating-stars" aria-hidden="true">
+        {[1, 2, 3, 4, 5].map((i) => (
+          <Star
+            key={i}
+            size={16}
+            fill={i <= Math.round(r.avg) ? 'currentColor' : 'none'}
+            aria-hidden="true"
+          />
+        ))}
+      </span>
+      <strong>{r.avg.toFixed(1).replace('.', ',')}</strong>
+      <span className="rating-count">
+        · {r.count} {word}
+      </span>
+    </>
+  );
+  return q.data?.reviews.length ? (
+    <a
+      className="rating-badge"
+      href="#reviews"
+      aria-label={t('Рейтинг {avg} из 5', { avg: r.avg })}
+    >
+      {label}
+    </a>
+  ) : (
+    <a
+      className="rating-badge"
+      href={q.data!.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label={t('Рейтинг {avg} из 5', { avg: r.avg })}
+    >
+      {label}
+    </a>
+  );
+}
+
+function Reviews() {
+  const { t } = useT();
+  const q = useReviews();
   if (!q.data?.reviews.length) return null;
   return (
     <Section id="reviews" label={t('ОТЗЫВЫ')}>

@@ -836,7 +836,10 @@ describe.sequential('real PostgreSQL, HTTP and independent Nest instances', () =
         (await call('/admin/growth', 'GET', undefined, admin)).body as unknown as Lists;
       let l = await lists();
       expect(l.reviews.map((r) => r.id)).toContain(reviewed.id);
-      expect(l.reviews.find((r) => r.id === reviewed.id)?.text).toContain('https://2gis.kz/firm/1');
+      // The request leads to a private rating first; the 2GIS page comes after 4–5 stars.
+      expect(l.reviews.find((r) => r.id === reviewed.id)?.text).toMatch(
+        new RegExp(`/r/${reviewed.id}\\.[A-Za-z0-9_-]{22}$`),
+      );
       const mine = (r: { guestPhone: string }) => r.guestPhone.includes(tag.slice(3));
       expect(l.returns.filter(mine).map((r) => r.id)).toEqual([away.id]);
       expect(l.returns.find((r) => r.id === away.id)?.text).toContain('/book');
@@ -871,10 +874,9 @@ describe.sequential('real PostgreSQL, HTTP and independent Nest instances', () =
       );
       expect(toReviewed).toHaveLength(1);
       expect(toReviewed[0].template.name).toBe('review_request');
-      expect(toReviewed[0].template.components[0].parameters.map((p) => p.text)).toEqual([
-        'Клиент 1',
-        'https://2gis.kz/firm/1',
-      ]);
+      const [name, link] = toReviewed[0].template.components[0].parameters.map((p) => p.text);
+      expect(name).toBe('Клиент 1');
+      expect(link).toMatch(new RegExp(`/r/${reviewed.id}\\.[A-Za-z0-9_-]{22}$`));
       expect(
         (await db.appointment.findUniqueOrThrow({ where: { id: reviewed.id } })).reviewRequestedAt,
       ).not.toBe(null);
@@ -1456,9 +1458,17 @@ describe.sequential('real PostgreSQL, HTTP and independent Nest instances', () =
           admin,
         );
       await growth(0);
-      expect((await call('/offers')).body).toEqual({ loyalty: null, birthdayDiscount: null });
+      expect((await call('/offers')).body).toEqual({
+        loyalty: null,
+        birthdayDiscount: null,
+        referral: null,
+      });
       await growth(15);
-      expect((await call('/offers')).body).toEqual({ loyalty: null, birthdayDiscount: 15 });
+      expect((await call('/offers')).body).toEqual({
+        loyalty: null,
+        birthdayDiscount: 15,
+        referral: null,
+      });
       await growth(0);
       const settings = { enabled: true, every: 3, reward: 'стрижка в подарок' };
       expect((await call('/admin/loyalty', 'PUT', settings, c1)).status).toBe(403);
@@ -1790,6 +1800,241 @@ describe.sequential('real PostgreSQL, HTTP and independent Nest instances', () =
       await db.pushSubscription.deleteMany({ where: { endpoint } });
       await db.material.deleteMany({ where: { name } });
       await db.expense.deleteMany({ where: { date: day } });
+    }
+  });
+  it('family booking, source, «приведи подругу» and the private rating before the 2GIS review', async () => {
+    process.env.PUSH_DRY_RUN = '1';
+    const endpoint = `https://push.example.com/${randomUUID()}`;
+    const ip = `192.0.2.${Math.floor(Math.random() * 250) + 1}`;
+    const post = async (path: string, body: unknown) => {
+      const res = await fetch(urls[0] + '/api/v1' + path, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          origin,
+          'x-csrf-protection': '1',
+          'x-forwarded-for': ip,
+        },
+        body: JSON.stringify(body),
+      });
+      return { status: res.status, body: (await res.json()) as Record<string, unknown> };
+    };
+    const day = Temporal.PlainDate.from(salonDate(new Date(), 'Asia/Almaty'))
+      .add({ days: 20 + Math.floor(Math.random() * 35) })
+      .toString();
+    const at = (time: string) => localInstant(day, time, 'Asia/Almaty').toISOString();
+    const tail = String(Math.floor(Math.random() * 1e7)).padStart(7, '0');
+    const phone = `+7 708 ${tail}`;
+    const created: string[] = [];
+    try {
+      expect(
+        (
+          await call(
+            '/push/subscribe',
+            'POST',
+            { endpoint, keys: { p256dh: 'BOr'.padEnd(87, 'v'), auth: 'auth-secret-5' } },
+            admin,
+          )
+        ).status,
+      ).toBe(201);
+      // Family: three visits back to back from 10:00 (60 min service + 15 min buffer each).
+      const family = await post('/booking-requests', {
+        serviceId: service,
+        masterId: master,
+        startsAt: at('10:00'),
+        name: 'Мама',
+        phone,
+        source: 'instagram',
+        referrerPhone: '+7 701 111 22 33',
+        family: [
+          { name: 'Алихан', serviceId: service },
+          { name: 'Аружан', serviceId: service },
+        ],
+      });
+      expect(family.status).toBe(201);
+      const visits = family.body.visits as { id: string; name: string; startsAt: string }[];
+      created.push(...visits.map((v) => v.id));
+      expect(visits.map((v) => v.name)).toEqual(['Мама', 'Алихан', 'Аружан']);
+      expect(visits[0].startsAt).toBe(at('10:00'));
+      const rows = await db.appointment.findMany({
+        where: { id: { in: created } },
+        orderBy: { startsAt: 'asc' },
+      });
+      // Each next visit starts when the previous one (with its buffer) frees the chair.
+      for (let i = 1; i < rows.length; i++)
+        expect(+rows[i].startsAt).toBe(+rows[i - 1].occupiedUntil);
+      expect(rows.every((r) => r.status === 'PENDING' && r.source === 'instagram')).toBe(true);
+      // «Приведи подругу» is off: the recommendation is not stored.
+      expect(rows.every((r) => r.referrerPhone === null)).toBe(true);
+      expect(
+        (
+          await post('/booking-requests', {
+            serviceId: service,
+            masterId: master,
+            startsAt: at('16:00'),
+            name: 'X',
+            phone,
+            source: 'tv',
+          })
+        ).status,
+      ).toBe(400);
+
+      // «Приведи подругу» on: the referrer is stored (not for yourself) and shown to the salon.
+      expect(
+        ((await call('/offers')).body as unknown as { referral: unknown }).referral,
+      ).toBeNull();
+      expect(
+        (await call('/admin/referral', 'PUT', { enabled: true, reward: 'скидка 10%' }, c1)).status,
+      ).toBe(403);
+      expect(
+        (await call('/admin/referral', 'PUT', { enabled: true, reward: 'скидка 10%' }, admin))
+          .status,
+      ).toBe(200);
+      expect(((await call('/offers')).body as unknown as { referral: unknown }).referral).toEqual({
+        reward: 'скидка 10%',
+      });
+      const friend = await post('/booking-requests', {
+        serviceId: service,
+        masterId: master,
+        startsAt: at('20:00'),
+        name: 'Подруга',
+        phone: '+7 708 000 00 02',
+        source: 'friends',
+        referrerPhone: phone,
+      });
+      expect(friend.status).toBe(201);
+      created.push(friend.body.id as string);
+      const self = await post('/booking-requests', {
+        serviceId: service,
+        masterId: master,
+        startsAt: at('18:00'),
+        name: 'Сама себя',
+        phone: '+7 708 000 00 03',
+        referrerPhone: '8 708 000 00 03',
+      });
+      created.push(self.body.id as string);
+      const svc = await db.service.findUniqueOrThrow({ where: { id: service } });
+      // When the rest do not fit in a row, nothing is booked.
+      const blocked = await post('/booking-requests', {
+        serviceId: service,
+        masterId: master,
+        // Ends exactly when «Сама себя» starts at 18:00, so the son has no room within an hour.
+        startsAt: new Date(
+          Date.parse(at('18:00')) - (svc.durationMinutes + svc.bufferAfterMinutes) * 60000,
+        ).toISOString(),
+        name: 'Вторая семья',
+        phone: '+7 708 000 00 01',
+        family: [{ name: 'Сын', serviceId: service }],
+      });
+      expect([blocked.status, blocked.body.code]).toEqual([409, 'FAMILY_NO_TIME']);
+      expect(
+        await db.appointment.count({
+          where: { guestPhone: '+7 708 000 00 01', status: { not: 'CANCELLED' } },
+        }),
+      ).toBe(0);
+      expect(
+        (await db.appointment.findUniqueOrThrow({ where: { id: friend.body.id as string } }))
+          .referrerPhone,
+      ).toBe('7708' + tail);
+      expect(
+        (await db.appointment.findUniqueOrThrow({ where: { id: self.body.id as string } }))
+          .referrerPhone,
+      ).toBeNull();
+      const dayView = (
+        await call(`/admin/day?date=${day}&masterId=${master}`, 'GET', undefined, admin)
+      ).body as unknown as { referral: unknown };
+      expect(dayView.referral).toEqual({ reward: 'скидка 10%' });
+
+      // The visit happened: rating is private first; 4–5 lead to 2GIS, 1–3 reach the owner.
+      const ref = (family.body.manageUrl as string).split('/v/')[1];
+      expect((await call(`/visit/${ref}/rate`, 'POST', { rating: 5 })).body.code).toBe('NOT_YET');
+      const past = new Date(Date.now() - 4 * 3600000);
+      const lone = await db.master.create({
+        data: { name: 'Мастер для оценки', description: 'test' },
+      });
+      await db.appointment.update({
+        where: { id: friend.body.id as string },
+        data: {
+          status: 'COMPLETED',
+          startsAt: past,
+          endsAt: new Date(+past + svc.durationMinutes * 60000),
+          occupiedUntil: new Date(+past + (svc.durationMinutes + svc.bufferAfterMinutes) * 60000),
+          holdUntil: null,
+          masterId: lone.id,
+        },
+      });
+      const { VisitLinks } = loadCompiled('../dist/src/visit.js') as {
+        VisitLinks: new (...args: never[]) => { ref(id: string): Promise<string> };
+      };
+      const friendRef = await apps[0].get(VisitLinks).ref(friend.body.id as string);
+      expect((await call(`/visit/${friendRef}`)).body).toMatchObject({
+        canRate: true,
+        rating: null,
+      });
+      expect((await call(`/visit/${friendRef}/rate`, 'POST', { rating: 6 })).status).toBe(400);
+      const happy = (await call(`/visit/${friendRef}/rate`, 'POST', { rating: 5 }))
+        .body as unknown as { reviewUrl: string };
+      expect(happy.reviewUrl).toMatch(/^https:\/\//);
+      const { Push } = loadCompiled('../dist/src/push.js') as {
+        Push: new (...args: never[]) => {
+          sent: { endpoint: string; message: { title: string; body: string } }[];
+        };
+      };
+      const mine = () =>
+        apps[0]
+          .get(Push)
+          .sent.filter((x) => x.endpoint === endpoint)
+          .map((x) => x.message.title);
+      expect(mine().some((t) => t.startsWith('Оценка'))).toBe(false);
+      const sad = (
+        await call(`/visit/${friendRef}/rate`, 'POST', { rating: 2, feedback: 'Долго ждала' })
+      ).body as unknown as { reviewUrl: unknown };
+      expect(sad.reviewUrl).toBeNull();
+      expect(mine()).toContain('Оценка 2/5: Подруга');
+      expect(
+        apps[0]
+          .get(Push)
+          .sent.find((x) => x.endpoint === endpoint && x.message.title === 'Оценка 2/5: Подруга')
+          ?.message.body,
+      ).toBe('Долго ждала');
+
+      // The owner sees ratings and whom to thank, and the review request links to the rating.
+      const growth = (await call('/admin/growth', 'GET', undefined, admin)).body as unknown as {
+        ratings: { id: string; rating: number; feedback: string }[];
+        referrals: { id: string; referrerPhone: string; text: string; status: string }[];
+        reviews: { id: string; text: string }[];
+      };
+      expect(growth.ratings.find((r) => r.id === friend.body.id)).toMatchObject({
+        rating: 2,
+        feedback: 'Долго ждала',
+      });
+      const thanks = growth.referrals.find((r) => r.id === friend.body.id)!;
+      expect(thanks).toMatchObject({
+        referrerPhone: '7708' + tail,
+        status: 'COMPLETED',
+        referrerName: 'Мама',
+      });
+      expect(thanks.text).toContain('скидка 10%');
+      expect(
+        (await call(`/admin/appointments/${thanks.id}/referral-thanked`, 'PATCH', {}, admin))
+          .status,
+      ).toBe(200);
+      const today = salonDate(new Date(), 'Asia/Almaty');
+      const stats = (await call(`/admin/stats?from=${today}&to=${today}`, 'GET', undefined, admin))
+        .body as unknown as {
+        sources: { source: string; visits: number }[];
+        ratingAvg: number;
+      };
+      expect(stats.sources.find((x) => x.source === 'friends')?.visits).toBeGreaterThanOrEqual(1);
+      expect(stats.ratingAvg).not.toBeNull();
+    } finally {
+      delete process.env.PUSH_DRY_RUN;
+      await db.pushSubscription.deleteMany({ where: { endpoint } });
+      await db.setting.deleteMany({ where: { key: 'referral' } });
+      await db.appointment.updateMany({
+        where: { id: { in: created }, status: { not: 'COMPLETED' } },
+        data: { status: 'CANCELLED', cancelledAt: new Date(), holdUntil: null },
+      });
     }
   });
   it('rate limits abusive client without blocking another behind the trusted proxy', async () => {

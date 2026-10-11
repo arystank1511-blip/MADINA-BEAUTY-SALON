@@ -3,11 +3,12 @@ import { Request, Response } from 'express';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Db } from './db';
 import { config } from './config';
-import { AvailabilityDto, BookingRequestDto, MasterQuery } from './dto';
+import { AvailabilityDto, BookingRequestDto, MasterQuery, SOURCE_NAMES } from './dto';
+import { salonDate } from './availability/rules';
 import { fail } from './errors';
 import { Telegram } from './telegram';
 import { BookingService } from './booking/booking.service';
-import { intlPhone } from './reminders';
+import { intlPhone } from './phone';
 import { Clients } from './clients';
 import { Site } from './site';
 import { Loyalty } from './loyalty';
@@ -86,38 +87,59 @@ export class PublicController {
       );
     }
     if (body.birthday) await this.clients.rememberBirthday(body.phone, body.birthday);
-    const a = await this.booking.book(
-      body,
-      { guestName: body.name, guestPhone: body.phone },
-      { pending: true },
-    );
-    const when = new Intl.DateTimeFormat('ru-RU', {
-      timeZone: config.timezone,
-      day: 'numeric',
-      month: 'long',
-      weekday: 'short',
-      hour: '2-digit',
-      minute: '2-digit',
-    }).format(a.startsAt);
-    const price = new Intl.NumberFormat('ru-RU', {
-      style: 'currency',
-      currency: config.currency,
-      currencyDisplay: 'narrowSymbol',
-      maximumFractionDigits: 2,
-    }).format(a.priceMinor / 100);
+    const visits = await this.bookFamily(body);
+    const when = (d: Date) =>
+      new Intl.DateTimeFormat('ru-RU', {
+        timeZone: config.timezone,
+        day: 'numeric',
+        month: 'long',
+        weekday: 'short',
+        hour: '2-digit',
+        minute: '2-digit',
+      }).format(d);
+    const time = (d: Date) =>
+      new Intl.DateTimeFormat('ru-RU', {
+        timeZone: config.timezone,
+        hour: '2-digit',
+        minute: '2-digit',
+      }).format(d);
+    const price = (minor: number) =>
+      new Intl.NumberFormat('ru-RU', {
+        style: 'currency',
+        currency: config.currency,
+        currencyDisplay: 'narrowSymbol',
+        maximumFractionDigits: 2,
+      }).format(minor / 100);
+    const [a] = visits;
+    const referral = await this.loyalty.activeReferral();
     const [telegram] = await Promise.all([
       this.telegram.notify([
         `Новая заявка · ${config.name}`,
-        `Услуга: ${a.serviceName} (${price}, ${a.durationMinutes} мин)`,
+        ...(visits.length > 1
+          ? [
+              `Семья, ${visits.length} чел. подряд, ${when(a.startsAt)}:`,
+              ...visits.map(
+                (v) =>
+                  `${time(v.startsAt)} ${v.guestName} — ${v.serviceName} (${price(v.priceMinor)})`,
+              ),
+            ]
+          : [
+              `Услуга: ${a.serviceName} (${price(a.priceMinor)}, ${a.durationMinutes} мин)`,
+              `Время: ${when(a.startsAt)}`,
+              `Имя: ${body.name}`,
+            ]),
         `Мастер: ${a.master.name}`,
-        `Время: ${when}`,
-        `Имя: ${body.name}`,
         `Телефон: ${body.phone}`,
+        ...(body.source ? [`Узнали: ${SOURCE_NAMES[body.source]}`] : []),
+        ...(referral && a.referrerPhone ? [`Посоветовал(а): +${a.referrerPhone}`] : []),
         'Время придержано на 3 часа. Подтвердите в «Мой день».',
       ]),
       this.push.notifyStaff({
-        title: `Новая заявка: ${body.name}`,
-        body: `${when} · ${a.serviceName}. Подтвердите или откажите.`,
+        title:
+          visits.length > 1
+            ? `Новая заявка: ${body.name} и ещё ${visits.length - 1}`
+            : `Новая заявка: ${body.name}`,
+        body: `${when(a.startsAt)} · ${visits.map((v) => v.serviceName).join(', ')}. Подтвердите или откажите.`,
         tag: `request-${a.id}`,
       }),
     ]);
@@ -127,18 +149,95 @@ export class PublicController {
       holdUntil: a.holdUntil,
       telegram,
       manageUrl: await this.links.url(a.id),
+      visits: await Promise.all(
+        visits.map(async (v) => ({
+          id: v.id,
+          name: v.guestName,
+          serviceName: v.serviceName,
+          startsAt: v.startsAt,
+          manageUrl: await this.links.url(v.id),
+        })),
+      ),
     };
+  }
+  /**
+   * The client's visit, then each family member's right after the previous one (the first free
+   * start within an hour). If someone does not fit, every visit of this request is released.
+   */
+  private async bookFamily(body: BookingRequestDto) {
+    const referral = await this.loyalty.activeReferral();
+    const own = intlPhone(body.phone);
+    const referrer = referral && body.referrerPhone ? intlPhone(body.referrerPhone) : '';
+    const extra = {
+      source: body.source ?? null,
+      // Recommending yourself does not count.
+      referrerPhone: referrer && referrer !== own ? referrer : null,
+    };
+    const visits = [
+      await this.booking.book(
+        body,
+        { guestName: body.name, guestPhone: body.phone },
+        { pending: true },
+      ),
+    ];
+    try {
+      for (const member of body.family ?? []) {
+        const previous = visits[visits.length - 1];
+        const date = salonDate(previous.startsAt, config.timezone);
+        const { slots } = await this.booking.availability(
+          this.db,
+          member.serviceId,
+          body.masterId,
+          date,
+        );
+        const after = +previous.occupiedUntil;
+        const next = slots.find(
+          (s) => Date.parse(s.startsAt) >= after && Date.parse(s.startsAt) <= after + 3600000,
+        );
+        if (!next)
+          fail(
+            409,
+            'FAMILY_NO_TIME',
+            'Подряд для всех не хватает времени. Выберите время пораньше или другой день.',
+          );
+        visits.push(
+          await this.booking.book(
+            { serviceId: member.serviceId, masterId: body.masterId, startsAt: next.startsAt },
+            { guestName: member.name, guestPhone: body.phone },
+            { pending: true },
+          ),
+        );
+      }
+    } catch (e) {
+      await this.db.appointment.updateMany({
+        where: { id: { in: visits.map((v) => v.id) } },
+        data: { status: 'CANCELLED', cancelledAt: new Date(), holdUntil: null },
+      });
+      throw e;
+    }
+    await this.db.appointment.updateMany({
+      where: { id: { in: visits.map((v) => v.id) } },
+      data: { source: extra.source },
+    });
+    if (extra.referrerPhone)
+      await this.db.appointment.update({
+        where: { id: visits[0].id },
+        data: { referrerPhone: extra.referrerPhone },
+      });
+    visits[0] = { ...visits[0], ...extra };
+    return visits;
   }
   @Get('offers')
   @ApiOperation({
     summary:
-      'Включённые предложения: { loyalty: { every, reward } | null, birthdayDiscount: % | null }',
+      'Включённые предложения: { loyalty, birthdayDiscount, referral } — null, пока выключены',
   })
   async offers() {
     const { birthdayDiscount } = await this.growth.settings();
     return {
       loyalty: await this.loyalty.active(),
       birthdayDiscount: birthdayDiscount > 0 ? birthdayDiscount : null,
+      referral: await this.loyalty.activeReferral(),
     };
   }
   @Get('promo') @ApiOperation({ summary: 'Баннер акции: { promo: {...} | null }' }) async promo() {

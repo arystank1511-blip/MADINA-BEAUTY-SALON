@@ -25,6 +25,18 @@ import { Arrow, ButtonLink, ErrorBox, Loading, WhatsAppIcon, WhatsAppLink } from
 import { BirthdayInput } from '../clients';
 import { PromoBanner, useOffers } from '../site';
 import { useT } from '../i18n';
+interface Sent {
+  manageUrl?: string;
+  visits?: { id: string; name: string; serviceName: string; startsAt: string; manageUrl: string }[];
+}
+const SOURCE_OPTIONS = [
+  ['instagram', 'Instagram'],
+  ['2gis', '2ГИС'],
+  ['maps', 'Google или Яндекс Карты'],
+  ['friends', 'Друзья, родные'],
+  ['passing', 'Проходили мимо'],
+  ['other', 'Другое'],
+] as const;
 export function Book({ config, admin = false }: { config: Config; admin?: boolean }) {
   const [params, setParams] = useSearchParams(),
     services = useServices(),
@@ -38,7 +50,10 @@ export function Book({ config, admin = false }: { config: Config; admin?: boolea
     [guestName, setGuestName] = useState(''),
     [guestPhone, setGuestPhone] = useState(''),
     [birthday, setBirthday] = useState(''),
-    [sent, setSent] = useState<{ manageUrl?: string } | null>(null);
+    [sent, setSent] = useState<Sent | null>(null),
+    [family, setFamily] = useState<{ name: string; serviceId: string }[]>([]),
+    [source, setSource] = useState(''),
+    [referrer, setReferrer] = useState('');
   const [customerPage, setCustomerPage] = useState(1);
   const serviceId = params.get('service') || '',
     masterId = params.get('master') || '',
@@ -141,26 +156,43 @@ export function Book({ config, admin = false }: { config: Config; admin?: boolea
         void client.invalidateQueries({ queryKey: ['me'] });
     },
   });
+  const familyVisits = sent?.visits && sent.visits.length > 1 ? sent.visits : null;
   const whatsappText = [
     `Здравствуйте! Хочу записаться в салон «${config.name}».`,
-    service &&
-      `Услуга: ${service.name}${service.category ? `, ${service.category.toLowerCase()}` : ''} (${price(service, config.currency)})`,
+    ...(familyVisits
+      ? [
+          `Нас ${familyVisits.length}, ${dateLabel(familyVisits[0].startsAt, config.timezone)}:`,
+          ...familyVisits.map(
+            (v) => `${timeLabel(v.startsAt, config.timezone)} — ${v.name}: ${v.serviceName}`,
+          ),
+        ]
+      : [
+          service &&
+            `Услуга: ${service.name}${service.category ? `, ${service.category.toLowerCase()}` : ''} (${price(service, config.currency)})`,
+          time && `Время: ${dateLabel(time, config.timezone)}, ${timeLabel(time, config.timezone)}`,
+        ]),
     master && `Мастер: ${master.name}`,
-    time && `Время: ${dateLabel(time, config.timezone)}, ${timeLabel(time, config.timezone)}`,
     guestName.trim() && `Меня зовут ${guestName.trim()}.`,
   ]
     .filter(Boolean)
     .join('\n');
+  const familyServices =
+    services.data?.filter((s) => master?.services.some((ms) => ms.serviceId === s.id)) ?? [];
   // The request holds the slot for the master; WhatsApp is how the client confirms it.
   const request = useMutation({
     mutationFn: () =>
-      send<{ manageUrl?: string }>('/booking-requests', 'POST', {
+      send<Sent>('/booking-requests', 'POST', {
         serviceId,
         masterId,
         startsAt: time,
         name: guestName.trim(),
         phone: guestPhone.trim(),
         ...(birthday ? { birthday } : {}),
+        ...(source ? { source } : {}),
+        ...(referrer.trim() && offers.data?.referral ? { referrerPhone: referrer.trim() } : {}),
+        ...(family.length
+          ? { family: family.map((m) => ({ name: m.name.trim(), serviceId: m.serviceId })) }
+          : {}),
       }),
     onSuccess: (r) => {
       setSent(r);
@@ -216,9 +248,22 @@ export function Book({ config, admin = false }: { config: Config; admin?: boolea
         <p className="eyebrow">{t('ВРЕМЯ ЗАБРОНИРОВАНО')}</p>
         <h1>{t('Остался один шаг.')}</h1>
         <p className="page-intro">
-          {service && t(service.name)}
-          {time &&
-            ` · ${dateLabel(time, config.timezone, locale)}, ${timeLabel(time, config.timezone)}`}
+          {familyVisits ? (
+            <>
+              {dateLabel(familyVisits[0].startsAt, config.timezone, locale)}:
+              {familyVisits.map((v) => (
+                <span key={v.id} className="family-line">
+                  {timeLabel(v.startsAt, config.timezone)} — {v.name}, {t(v.serviceName)}
+                </span>
+              ))}
+            </>
+          ) : (
+            <>
+              {service && t(service.name)}
+              {time &&
+                ` · ${dateLabel(time, config.timezone, locale)}, ${timeLabel(time, config.timezone)}`}
+            </>
+          )}
           <br />
           {t(
             'Мы держим это время для вас 3 часа. Отправьте сообщение в WhatsApp — мастер подтвердит запись в ответ.',
@@ -533,6 +578,101 @@ export function Book({ config, admin = false }: { config: Config; admin?: boolea
                       value={birthday}
                       onChange={setBirthday}
                     />
+                    <fieldset className="family">
+                      <legend>{t('Записать вместе со мной')}</legend>
+                      <p className="caption">
+                        {t('Дети, мама, подруга — время для них будет сразу после вас.')}
+                      </p>
+                      {family.map((m, i) => (
+                        <div className="family-row" key={i}>
+                          <label>
+                            {t('Имя')}
+                            <input
+                              required
+                              minLength={2}
+                              maxLength={80}
+                              value={m.name}
+                              onChange={(e) =>
+                                setFamily(
+                                  family.map((x, j) =>
+                                    j === i ? { ...x, name: e.target.value } : x,
+                                  ),
+                                )
+                              }
+                            />
+                          </label>
+                          <label>
+                            {t('Услуга')}
+                            <select
+                              required
+                              value={m.serviceId}
+                              onChange={(e) =>
+                                setFamily(
+                                  family.map((x, j) =>
+                                    j === i ? { ...x, serviceId: e.target.value } : x,
+                                  ),
+                                )
+                              }
+                            >
+                              <option value="">{t('Выберите услугу')}</option>
+                              {byCategory(familyServices).map((g) => (
+                                <optgroup key={g.category} label={t(g.category)}>
+                                  {g.items.map((s) => (
+                                    <option key={s.id} value={s.id}>
+                                      {t(s.name)} · {price(s, config.currency, lang)}
+                                    </option>
+                                  ))}
+                                </optgroup>
+                              ))}
+                            </select>
+                          </label>
+                          <button
+                            type="button"
+                            className="icon-button"
+                            aria-label={t('Убрать')}
+                            onClick={() => setFamily(family.filter((_, j) => j !== i))}
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ))}
+                      {family.length < 3 && (
+                        <button
+                          type="button"
+                          className="button secondary"
+                          onClick={() => setFamily([...family, { name: '', serviceId: '' }])}
+                        >
+                          + {t('Добавить человека')}
+                        </button>
+                      )}
+                    </fieldset>
+                    <label>
+                      {t('Откуда вы о нас узнали?')}
+                      <select value={source} onChange={(e) => setSource(e.target.value)}>
+                        <option value="">{t('Не важно')}</option>
+                        {SOURCE_OPTIONS.map(([value, label]) => (
+                          <option key={value} value={value}>
+                            {t(label)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    {offers.data?.referral && (
+                      <label>
+                        {t('Кто вам нас посоветовал? Телефон — {reward} вам обоим', {
+                          reward: offers.data.referral.reward,
+                        })}
+                        <input
+                          type="tel"
+                          inputMode="tel"
+                          maxLength={30}
+                          placeholder="+7 777 123 45 67"
+                          pattern="[+0-9\s()\-]*"
+                          value={referrer}
+                          onChange={(e) => setReferrer(e.target.value)}
+                        />
+                      </label>
+                    )}
                     <button
                       className="button whatsapp"
                       disabled={!time || !master || !service || request.isPending}

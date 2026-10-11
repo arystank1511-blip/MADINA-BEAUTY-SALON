@@ -100,13 +100,24 @@ export class GiftController {
   @Get('reviews')
   @ApiOperation({ summary: 'Отзывы на сайте и ссылка на все отзывы (2GIS)' })
   async reviews() {
-    const [reviews, settings] = await Promise.all([
+    const [reviews, settings, posted, rated] = await Promise.all([
       this.db.review.findMany({ orderBy: { createdAt: 'desc' }, take: 12 }),
       this.growth.settings(),
+      this.db.review.aggregate({ _sum: { rating: true }, _count: { rating: true } }),
+      this.db.appointment.aggregate({
+        where: { rating: { not: null } },
+        _sum: { rating: true },
+        _count: { rating: true },
+      }),
     ]);
+    // Every real rating counts: reviews shown on the site and clients' own ratings after a visit.
+    const count = posted._count.rating + rated._count.rating;
+    const sum = (posted._sum.rating ?? 0) + (rated._sum.rating ?? 0);
     return {
       reviews: reviews.map(({ id, name, text, rating }) => ({ id, name, text, rating })),
       url: settings.reviewUrl,
+      // Shown next to the master's name once there are a few ratings.
+      rating: count >= 3 ? { avg: Math.round((sum / count) * 10) / 10, count } : null,
     };
   }
 }

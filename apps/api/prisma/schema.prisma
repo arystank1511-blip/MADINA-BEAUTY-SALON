@@ -141,6 +141,16 @@ model Appointment {
   paidMinor Int?
   /// CASH or KASPI.
   paymentMethod String?
+  /// How the client heard about the salon (booking form): instagram, 2gis, maps, friends, passing, other.
+  source String?
+  /// Phone of whoever recommended the salon («Приведи подругу»), international digits.
+  referrerPhone String?
+  /// When the salon thanked the referrer for this visit.
+  referralThankedAt DateTime? @db.Timestamptz(3)
+  /// The client's own 1–5 rating of the visit and an optional comment.
+  rating Int?
+  feedback String?
+  ratedAt DateTime? @db.Timestamptz(3)
   customer User? @relation("Customer",fields:[customerId],references:[id],onDelete:Restrict)
   cancelledBy User? @relation("Canceller",fields:[cancelledById],references:[id])
   master Master @relation(fields:[masterId],references:[id])
