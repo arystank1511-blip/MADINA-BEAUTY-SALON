@@ -41,7 +41,8 @@ import { useT } from '../i18n';
 export function Home({ config }: { config: Config }) {
   const services = useServices(),
     masters = useMasters(),
-    gallery = useGallery();
+    gallery = useGallery(),
+    hours = useHours();
   const { t } = useT();
   return (
     <>
@@ -272,7 +273,7 @@ export function Home({ config }: { config: Config }) {
               <Clock size={20} />
             </span>
             <span>{t('ВРЕМЯ РАБОТЫ')}</span>
-            <p>{t(config.hours)}</p>
+            <p>{hoursText(hours.data, t) ?? t(config.hours)}</p>
             <small>{t('Запись с 10:00')}</small>
           </div>
           <div>
@@ -363,26 +364,84 @@ const cheapest = (services: Service[] = []) =>
 const cheapestHaircut = (services: Service[] = []) =>
   cheapest(services.filter((s) => /стриж|нулевк/i.test(s.name))) ?? cheapest(services);
 
-/** Salon-local «HH:MM» now, and the opening hours parsed from «Ежедневно · 10:00–18:00». */
+type Day = { weekday: number; start: string; end: string };
+function useHours() {
+  return useQuery({
+    queryKey: ['hours'],
+    queryFn: () => api<{ days: Day[] }>('/hours').then((r) => r.days),
+    staleTime: 10 * 60000,
+  });
+}
+const SHORT = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+/** «Пн–Сб · 10:00–18:00, Вс — выходной» from the weekly schedule; null until it loads. */
+function hoursText(days: Day[] | undefined, t: T) {
+  if (!days?.length) return null;
+  const groups: { from: number; to: number; start: string; end: string }[] = [];
+  for (const d of days) {
+    const last = groups[groups.length - 1];
+    if (last && last.to === d.weekday - 1 && last.start === d.start && last.end === d.end)
+      last.to = d.weekday;
+    else groups.push({ from: d.weekday, to: d.weekday, start: d.start, end: d.end });
+  }
+  const name = (n: number) => t(SHORT[n - 1]);
+  const parts = groups.map(
+    (g) =>
+      `${g.from === g.to ? name(g.from) : `${name(g.from)}–${name(g.to)}`} · ${g.start}–${g.end}`,
+  );
+  const off = [1, 2, 3, 4, 5, 6, 7].filter((n) => !days.some((d) => d.weekday === n));
+  if (off.length) parts.push(t('{days} — выходной', { days: off.map(name).join(', ') }));
+  return parts.join(', ');
+}
+/** Open now? And if not, when — today, tomorrow or on a named day (Sunday is closed). */
 function useOpenStatus(config: Config) {
   const [now, setNow] = useState(() => new Date());
+  const days = useHours().data;
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 60000);
     return () => clearInterval(id);
   }, []);
-  const hours = config.hours.match(/(\d{1,2}:\d{2})\s*[–-]\s*(\d{1,2}:\d{2})/);
-  if (!hours) return null;
-  const pad = (s: string) => s.padStart(5, '0');
-  const [open, close] = [pad(hours[1]), pad(hours[2])];
-  const time = new Intl.DateTimeFormat('en-GB', {
-    timeZone: config.timezone,
-    hour: '2-digit',
-    minute: '2-digit',
-    hourCycle: 'h23',
-  }).format(now);
-  if (time >= open && time < close) return { open: true, close, opens: open, today: true };
-  return { open: false, close, opens: open, today: time < open };
+  if (!days?.length) return null;
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-GB', {
+      timeZone: config.timezone,
+      weekday: 'short',
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23',
+    })
+      .formatToParts(now)
+      .map((p) => [p.type, p.value]),
+  );
+  const weekday = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].indexOf(parts.weekday) + 1;
+  const time = `${parts.hour}:${parts.minute}`;
+  const today = days.find((d) => d.weekday === weekday);
+  if (today && time >= today.start && time < today.end)
+    return { open: true as const, close: today.end };
+  if (today && time < today.start)
+    return { open: false as const, when: 'today' as const, opens: today.start };
+  for (let i = 1; i <= 7; i++) {
+    const n = ((weekday - 1 + i) % 7) + 1;
+    const next = days.find((d) => d.weekday === n);
+    if (next)
+      return {
+        open: false as const,
+        when: 'day' as const,
+        weekday: n,
+        opens: next.start,
+      };
+  }
+  return null;
 }
+/** «в понедельник», «во вторник»… for «откроемся в понедельник в 10:00». */
+const ON_DAY = [
+  'в понедельник',
+  'во вторник',
+  'в среду',
+  'в четверг',
+  'в пятницу',
+  'в субботу',
+  'в воскресенье',
+];
 
 /** Three answers a visitor wants first: open now?, where?, how much? */
 function HeroFacts({ config, services }: { config: Config; services?: Service[] }) {
@@ -397,9 +456,12 @@ function HeroFacts({ config, services }: { config: Config; services?: Service[] 
           <span className="status-dot" aria-hidden="true" />
           {status.open
             ? t('Открыто до {time}', { time: status.close })
-            : status.today
+            : status.when === 'today'
               ? t('Откроемся сегодня в {time}', { time: status.opens })
-              : t('Откроемся завтра в {time}', { time: status.opens })}
+              : t('Закрыто · откроемся {day} в {time}', {
+                  day: t(ON_DAY[status.weekday - 1]),
+                  time: status.opens,
+                })}
         </li>
       )}
       <li>

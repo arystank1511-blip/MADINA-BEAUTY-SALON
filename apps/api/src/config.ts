@@ -10,7 +10,7 @@ export const config = {
       : 'http://localhost:5173'),
   address: process.env.SALON_ADDRESS || 'с. Зеренда, ул. Тауелсиздик, 68, Акмолинская область',
   contact: process.env.SALON_CONTACT || 'WhatsApp +7 776 729 65 58',
-  hours: process.env.SALON_HOURS || 'Ежедневно · 10:00–18:00',
+  hours: process.env.SALON_HOURS || 'Пн–Сб · 10:00–18:00, Вс — выходной',
   // Digits only, international format without '+': used for wa.me links.
   payment: process.env.SALON_PAYMENT || 'Наличные · Kaspi QR',
   // 2GIS card of the salon: address, map and route.
