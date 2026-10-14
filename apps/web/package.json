@@ -7,7 +7,7 @@
     "dev": "vite --host 127.0.0.1",
     "build": "tsc -b && vite build",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run && jest"
   },
   "dependencies": {
     "@fontsource-variable/manrope": "5.2.8",
@@ -24,10 +24,19 @@
     "zod": "4"
   },
   "devDependencies": {
+    "@swc/core": "^1.16.18",
+    "@swc/jest": "^0.2.39",
     "@tailwindcss/vite": "4.1.17",
+    "@testing-library/dom": "^10.4.2",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.8",
+    "@types/jest": "^30.0.0",
     "@types/react": "19.2.5",
     "@types/react-dom": "19.2.3",
     "@vitejs/plugin-react": "5",
+    "jest": "^30.5.2",
+    "jest-environment-jsdom": "^30.5.2",
     "tailwindcss": "4.1.17",
     "typescript": "5.9.3",
     "vite": "^7.3.6",

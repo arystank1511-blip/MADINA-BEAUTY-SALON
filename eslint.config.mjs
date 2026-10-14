@@ -5,6 +5,22 @@ export default ts.config(
   js.configs.recommended,
   ...ts.configs.recommended,
   {
+    files: ['**/*.cjs'],
+    languageOptions: {
+      sourceType: 'commonjs',
+      globals: {
+        module: 'writable',
+        require: 'readonly',
+        Headers: 'readonly',
+        Request: 'readonly',
+        Response: 'readonly',
+        TextEncoder: 'readonly',
+        TextDecoder: 'readonly',
+      },
+    },
+    rules: { '@typescript-eslint/no-require-imports': 'off' },
+  },
+  {
     files: ['**/*.ts', '**/*.tsx'],
     rules: {
       '@typescript-eslint/no-explicit-any': 'error',
