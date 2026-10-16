@@ -2452,6 +2452,43 @@ header {
 .md-form label {
   font-size: 17px;
 }
+.md-rest.off {
+  color: var(--text);
+  border-left: 3px solid var(--accent);
+}
+.md-reopen {
+  margin-left: auto;
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 15px;
+  cursor: pointer;
+}
+.md-close-time {
+  width: 100%;
+  margin: 0 0 14px;
+}
+.md-range {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.md-range select {
+  width: 100%;
+  min-height: 52px;
+  font-size: 20px;
+}
+.md-quick {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  margin: 0;
+}
+.md-quick button {
+  white-space: nowrap;
+}
 .md-form input {
   min-height: 56px;
   font-size: 20px;

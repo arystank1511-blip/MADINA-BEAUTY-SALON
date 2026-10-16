@@ -57,7 +57,7 @@ type Row =
   | { kind: 'free'; at: string }
   | { kind: 'visit'; at: string; visit: Appointment }
   | { kind: 'break'; at: string; until: string }
-  | { kind: 'off'; at: string; until: string; reason: string };
+  | { kind: 'off'; id: string; at: string; until: string; reason: string };
 
 const STEP = 30 * 60000;
 const overlaps = (a: number, b: number, c: number, d: number) => a < d && b > c;
@@ -82,6 +82,7 @@ function rows(day: Day): Row[] {
     ...day.breaks.map((b) => ({ kind: 'break' as const, at: b.startsAt, until: b.endsAt })),
     ...day.timeOffs.map((o) => ({
       kind: 'off' as const,
+      id: o.id,
       at: o.startsAt,
       until: o.endsAt,
       reason: o.reason,
@@ -106,6 +107,7 @@ export function MasterDay({ config }: { config: Config }) {
   const [missing, setMissing] = useState<Appointment | null>(null);
   const [paying, setPaying] = useState<Appointment | null>(null);
   const [noting, setNoting] = useState<Appointment | null>(null);
+  const [closing, setClosing] = useState(false);
   const client = useQueryClient();
   const me = useMe();
   useMasterManifest();
@@ -125,6 +127,11 @@ export function MasterDay({ config }: { config: Config }) {
     void client.invalidateQueries({ queryKey: ['appointments'] });
     void client.invalidateQueries({ queryKey: ['availability'] });
   };
+  const reopen = useMutation({
+    mutationFn: ({ masterId, id }: { masterId: string; id: string }) =>
+      send(`/admin/masters/${masterId}/time-offs/${id}`, 'DELETE'),
+    onSuccess: refresh,
+  });
   const decide = useMutation({
     mutationFn: ({ id, action }: { id: string; action: 'confirm' | 'cancel' | 'no-show' }) =>
       send(`/admin/appointments/${id}/${action}`, 'PATCH'),
@@ -242,6 +249,12 @@ export function MasterDay({ config }: { config: Config }) {
                 }`
               : 'Выходной день'}
           </p>
+          {day.data.hours && (
+            <button className="md-btn ghost md-close-time" onClick={() => setClosing(true)}>
+              🚫 Закрыть время
+            </button>
+          )}
+          {reopen.error && <ErrorBox error={reopen.error} />}
           <ol className="md-list">
             {rows(day.data).map((r) =>
               r.kind === 'free' ? (
@@ -318,12 +331,21 @@ export function MasterDay({ config }: { config: Config }) {
                 </li>
               ) : (
                 <li key={r.kind + r.at}>
-                  <div className="md-rest">
+                  <div className={`md-rest ${r.kind}`}>
                     <span className="md-time">{time(r.at)}</span>
                     <span>
-                      {r.kind === 'break' ? '☕ Перерыв' : `🚫 ${r.reason || 'Не работаю'}`} до{' '}
+                      {r.kind === 'break' ? '☕ Перерыв' : `🚫 ${r.reason || 'Закрыто'}`} до{' '}
                       {time(r.until)}
                     </span>
+                    {r.kind === 'off' && (
+                      <button
+                        className="md-reopen"
+                        disabled={reopen.isPending}
+                        onClick={() => reopen.mutate({ masterId: day.data.master.id, id: r.id })}
+                      >
+                        Открыть
+                      </button>
+                    )}
                   </div>
                 </li>
               ),
@@ -336,6 +358,17 @@ export function MasterDay({ config }: { config: Config }) {
         </>
       )}
 
+      {closing && day.data?.hours && (
+        <CloseTime
+          day={{ ...day.data, hours: day.data.hours }}
+          config={config}
+          onClose={() => setClosing(false)}
+          onDone={() => {
+            setClosing(false);
+            refresh();
+          }}
+        />
+      )}
       {adding && day.data && (
         <AddVisit
           at={adding}
@@ -557,6 +590,131 @@ function AddVisit({
         )}
         <button className="md-btn yes big" disabled={!serviceId || mutation.isPending}>
           {mutation.isPending ? 'Записываю…' : '✓ Записать'}
+        </button>
+      </form>
+    </Modal>
+  );
+}
+
+const REASONS = ['Клиент без записи', 'Личные дела', 'Не работаю'];
+const SLOT = 15 * 60000;
+
+/**
+ * Closes part of the day so the site stops offering it: walk-in clients who came without
+ * booking, errands. The closed time shows in the day and opens again with one tap.
+ */
+function CloseTime({
+  day,
+  config,
+  onClose,
+  onDone,
+}: {
+  day: Day & { hours: Span };
+  config: Config;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const hours = day.hours;
+  const open = Date.parse(hours.startsAt),
+    shut = Date.parse(hours.endsAt);
+  // Not earlier than now on today's page, rounded down to a quarter hour.
+  const now = Math.floor(Date.parse(day.now) / SLOT) * SLOT;
+  const first = Math.max(open, Math.min(now, shut - SLOT));
+  const times: number[] = [];
+  for (let t = first; t <= shut; t += SLOT) times.push(t);
+  const [from, setFrom] = useState(first);
+  const [to, setTo] = useState(Math.min(first + 60 * 60000, shut));
+  const [reason, setReason] = useState(REASONS[0]);
+  const mutation = useMutation({
+    mutationFn: (body: unknown) => send(`/admin/masters/${day.master.id}/time-offs`, 'POST', body),
+    onSuccess: onDone,
+  });
+  const time = (ms: number) => timeLabel(new Date(ms).toISOString(), config.timezone);
+  const conflict = mutation.error instanceof ApiError && mutation.error.status === 409;
+  function submit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    mutation.mutate({
+      startsAt: new Date(from).toISOString(),
+      endsAt: new Date(to).toISOString(),
+      reason,
+    });
+  }
+  return (
+    <Modal title="Закрыть время" onClose={() => !mutation.isPending && onClose()}>
+      <form className="md-form" onSubmit={submit}>
+        <p className="caption">
+          На это время на сайте нельзя будет записаться. Например, пришёл клиент без записи.
+        </p>
+        <div className="md-range">
+          <label>
+            С
+            <select
+              value={from}
+              onChange={(e) => {
+                const v = Number(e.target.value);
+                setFrom(v);
+                if (to <= v) setTo(Math.min(v + 60 * 60000, shut));
+              }}
+            >
+              {times.slice(0, -1).map((t) => (
+                <option key={t} value={t}>
+                  {time(t)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            До
+            <select value={to} onChange={(e) => setTo(Number(e.target.value))}>
+              {times
+                .filter((t) => t > from)
+                .map((t) => (
+                  <option key={t} value={t}>
+                    {time(t)}
+                  </option>
+                ))}
+            </select>
+          </label>
+        </div>
+        <div className="md-chips md-quick">
+          <button type="button" onClick={() => setTo(shut)}>
+            До конца дня
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setFrom(first);
+              setTo(shut);
+            }}
+          >
+            {first === open ? 'Весь день' : 'Остаток дня'}
+          </button>
+        </div>
+        <fieldset>
+          <legend>Причина (видите только вы)</legend>
+          <div className="md-services">
+            {REASONS.map((r) => (
+              <button
+                type="button"
+                key={r}
+                aria-pressed={reason === r}
+                className={reason === r ? 'on' : ''}
+                onClick={() => setReason(r)}
+              >
+                {r}
+              </button>
+            ))}
+          </div>
+        </fieldset>
+        {conflict ? (
+          <div className="error" role="alert">
+            <p>На это время уже есть запись. Выберите другое время или сначала отмените запись.</p>
+          </div>
+        ) : (
+          mutation.error && <ErrorBox error={mutation.error} />
+        )}
+        <button className="md-btn no big" disabled={to <= from || mutation.isPending}>
+          {mutation.isPending ? 'Закрываю…' : `🚫 Закрыть ${time(from)}–${time(to)}`}
         </button>
       </form>
     </Modal>
