@@ -1259,6 +1259,28 @@ describe.sequential('real PostgreSQL, HTTP and independent Nest instances', () =
         nurgul,
       );
       expect(confirmed.body.status).toBe('CONFIRMED');
+      // She closes time for a walk-in client from «Мой день» and opens it again.
+      const off = await call(
+        `/admin/masters/${master}/time-offs`,
+        'POST',
+        {
+          startsAt: localInstant(day, '15:00', 'Asia/Almaty').toISOString(),
+          endsAt: localInstant(day, '15:30', 'Asia/Almaty').toISOString(),
+          reason: 'Клиент без записи',
+        },
+        nurgul,
+      );
+      expect(off.status).toBe(201);
+      expect(
+        (
+          await call(
+            `/admin/masters/${master}/time-offs/${off.body.id}`,
+            'DELETE',
+            undefined,
+            nurgul,
+          )
+        ).status,
+      ).toBe(200);
       expect(
         ((await call('/push/test', 'POST', {}, nurgul)).body as unknown as { sent: number }).sent,
       ).toBeGreaterThan(0);
@@ -2031,8 +2053,10 @@ describe.sequential('real PostgreSQL, HTTP and independent Nest instances', () =
         (await call(`/admin/appointments/${thanks.id}/referral-thanked`, 'PATCH', {}, admin))
           .status,
       ).toBe(200);
+      // The visit was moved 4 hours back: just after midnight that is yesterday.
       const today = salonDate(new Date(), 'Asia/Almaty');
-      const stats = (await call(`/admin/stats?from=${today}&to=${today}`, 'GET', undefined, admin))
+      const since = salonDate(past, 'Asia/Almaty');
+      const stats = (await call(`/admin/stats?from=${since}&to=${today}`, 'GET', undefined, admin))
         .body as unknown as {
         sources: { source: string; visits: number }[];
         ratingAvg: number;

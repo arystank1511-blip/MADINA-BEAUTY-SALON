@@ -218,7 +218,17 @@ test('mobile menu supports Escape; booking reflows at 200 percent', async ({ pag
 test('master day: book a walk-in, confirm a site request, cancel', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await login(page);
-  await page.getByRole('button', { name: 'Завтра', exact: true }).click();
+  // Tomorrow in the salon's time zone, or Monday when tomorrow is the Sunday day off.
+  const local = (ms: number, part: 'weekday' | 'date') =>
+    part === 'weekday'
+      ? new Intl.DateTimeFormat('en-US', { weekday: 'short', timeZone: 'Asia/Almaty' }).format(ms)
+      : new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Almaty' }).format(ms);
+  const sundayTomorrow = local(Date.now() + 86400000, 'weekday') === 'Sun';
+  const openDay = async () =>
+    sundayTomorrow
+      ? page.locator('.md-pick input').fill(local(Date.now() + 2 * 86400000, 'date'))
+      : page.getByRole('button', { name: 'Завтра', exact: true }).click();
+  await openDay();
   await expect(page.locator('.md-free').first()).toBeVisible();
   const name = `Сауле ${Date.now() % 10000}`;
   await page.locator('.md-free').first().click();
@@ -233,7 +243,7 @@ test('master day: book a walk-in, confirm a site request, cancel', async ({ page
   );
   const remind = await card.getByRole('link', { name: /Напомнить/ }).getAttribute('href');
   expect(remind?.startsWith('https://wa.me/77772223344?text=')).toBe(true);
-  expect(decodeURIComponent(remind!.split('?text=')[1])).toContain('завтра');
+  if (!sundayTomorrow) expect(decodeURIComponent(remind!.split('?text=')[1])).toContain('завтра');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   // A request from the site appears at the top and is confirmed with one tap.
   // Two days ahead, but never a Sunday: the salon is closed then.
@@ -262,7 +272,7 @@ test('master day: book a walk-in, confirm a site request, cancel', async ({ page
   await pending.getByRole('button', { name: /Подтвердить/ }).click();
   await expect(pending).toHaveCount(0);
   // Cancel the walk-in; its time becomes free again.
-  await page.getByRole('button', { name: 'Завтра', exact: true }).click();
+  await openDay();
   await card.getByRole('button', { name: 'Отменить запись' }).click();
   await page.getByRole('button', { name: 'Да, отменить' }).click();
   await expect(card).toHaveCount(0);
@@ -271,4 +281,48 @@ test('master day: book a walk-in, confirm a site request, cancel', async ({ page
     headers: { Origin: origin, 'X-CSRF-Protection': '1' },
     data: {},
   });
+});
+test('master closes time for a walk-in, then opens it again', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await login(page);
+  const ahead = new Date(Date.now() + 9 * 86400000);
+  if (ahead.getUTCDay() === 0) ahead.setUTCDate(ahead.getUTCDate() + 1);
+  const date = ahead.toISOString().slice(0, 10);
+  const fits = async () => {
+    const data = await (await page.request.get('/api/v1/admin/day?date=' + date)).json();
+    return { data, slots: data.fits[data.services[0].id] as string[] };
+  };
+  const { data, slots } = await fits();
+  const from = slots[0];
+  const label = (iso: string) =>
+    new Intl.DateTimeFormat('ru-RU', {
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZone: 'Asia/Almaty',
+    }).format(new Date(iso));
+  const to = new Date(Date.parse(from) + 30 * 60000).toISOString();
+  await page.locator('.md-pick input').fill(date);
+  await expect(page.locator('.md-free').first()).toBeVisible();
+  await page.getByRole('button', { name: '🚫 Закрыть время' }).click();
+  await page
+    .locator('.md-range select')
+    .first()
+    .selectOption({ label: label(from) });
+  await page
+    .locator('.md-range select')
+    .last()
+    .selectOption({ label: label(to) });
+  await page.getByRole('button', { name: 'Клиент без записи' }).click();
+  await page.getByRole('button', { name: `🚫 Закрыть ${label(from)}–${label(to)}` }).click();
+  const closed = page.locator('.md-rest.off').filter({ hasText: 'Клиент без записи' });
+  await expect(closed).toBeVisible();
+  // The site no longer offers the closed time.
+  expect((await fits()).slots).not.toContain(from);
+  const pub = await page.request.get(
+    `/api/v1/availability?serviceId=${data.services[0].id}&masterId=${data.master.id}&date=${date}`,
+  );
+  expect(JSON.stringify(await pub.json())).not.toContain(from);
+  await closed.getByRole('button', { name: 'Открыть' }).click();
+  await expect(closed).toHaveCount(0);
+  expect((await fits()).slots).toContain(from);
 });

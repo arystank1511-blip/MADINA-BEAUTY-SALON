@@ -244,10 +244,11 @@ export class AdminController {
       fail(400, 'INVALID_INTERVAL', 'Окончание отсутствия должно быть позже начала.');
     return { startsAt, endsAt, reason: b.reason };
   }
-  @Post('masters/:id/time-offs') @ApiOperation({ summary: 'Добавить отсутствие' }) offCreate(
-    @Param('id', ParseUUIDPipe) id: string,
-    @Body() b: TimeOffDto,
-  ) {
+  // The master closes time from «Мой день» too (walk-in clients, personal errands).
+  @Staff()
+  @Post('masters/:id/time-offs')
+  @ApiOperation({ summary: 'Добавить отсутствие' })
+  offCreate(@Param('id', ParseUUIDPipe) id: string, @Body() b: TimeOffDto) {
     const data = this.off(b);
     return this.schedule(id, (tx) => tx.timeOff.create({ data: { ...data, masterId: id } }));
   }
@@ -261,6 +262,7 @@ export class AdminController {
       tx.timeOff.update({ where: { id: offId, masterId: id }, data }),
     );
   }
+  @Staff()
   @Delete('masters/:id/time-offs/:offId')
   @ApiOperation({ summary: 'Удалить отсутствие' })
   offDelete(@Param('id', ParseUUIDPipe) id: string, @Param('offId', ParseUUIDPipe) offId: string) {
