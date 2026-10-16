@@ -373,7 +373,7 @@ function useHours() {
   });
 }
 const SHORT = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
-/** «Пн–Сб · 10:00–18:00, Вс — выходной» from the weekly schedule; null until it loads. */
+/** «Пн–Пт · 10:00–18:00, Сб · 10:00–15:00, Вс — выходной» from the weekly schedule; null until it loads. */
 function hoursText(days: Day[] | undefined, t: T) {
   if (!days?.length) return null;
   const groups: { from: number; to: number; start: string; end: string }[] = [];
