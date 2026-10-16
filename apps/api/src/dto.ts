@@ -9,6 +9,7 @@ import {
   IsEmail,
   IsIn,
   IsInt,
+  IsNumber,
   IsOptional,
   IsString,
   IsUUID,
@@ -533,6 +534,11 @@ export class PushTestDto {
   endpoint?: string;
 }
 export class PushSubscriptionDto extends PushEndpointDto {
+  /** Chrome sends `expirationTime: null` as part of the subscription; it is not used. */
+  @ApiPropertyOptional({ nullable: true, type: Number })
+  @IsOptional()
+  @IsNumber()
+  expirationTime?: number | null;
   @ApiProperty({ type: PushKeysDto })
   @ValidateNested()
   @Type(() => PushKeysDto)
