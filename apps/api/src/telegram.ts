@@ -12,8 +12,9 @@ export class Telegram {
     return process.env.TELEGRAM_BOT_TOKEN?.trim() || '';
   }
   private get chats() {
-    // Salon owner's chat by default; TELEGRAM_CHAT_ID overrides it (comma-separated list).
-    return (process.env.TELEGRAM_CHAT_ID || '5980317055')
+    // The owner's and master Nurgul's chats by default; TELEGRAM_CHAT_ID overrides them
+    // (comma-separated list).
+    return (process.env.TELEGRAM_CHAT_ID || '5980317055,6560514860')
       .split(',')
       .map((id) => id.trim())
       .filter(Boolean);
