@@ -236,9 +236,10 @@ test('master day: book a walk-in, confirm a site request, cancel', async ({ page
   expect(decodeURIComponent(remind!.split('?text=')[1])).toContain('завтра');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   // A request from the site appears at the top and is confirmed with one tap.
-  const day = await page.request.get(
-    '/api/v1/admin/day?date=' + new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 10),
-  );
+  // Two days ahead, but never a Sunday: the salon is closed then.
+  const ahead = new Date(Date.now() + 2 * 86400000);
+  if (ahead.getUTCDay() === 0) ahead.setUTCDate(ahead.getUTCDate() + 1);
+  const day = await page.request.get('/api/v1/admin/day?date=' + ahead.toISOString().slice(0, 10));
   const data = await day.json();
   const serviceId = data.services[0].id;
   const slot = data.fits[serviceId].at(-1);

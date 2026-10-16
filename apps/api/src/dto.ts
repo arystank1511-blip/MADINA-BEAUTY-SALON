@@ -1,4 +1,4 @@
-import { ApiProperty, PartialType } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
 import {
   ArrayMaxSize,
@@ -523,6 +523,14 @@ export class PushEndpointDto {
   @Length(10, 1000)
   @Matches(/^https:\/\//, { message: 'Адрес подписки должен быть https.' })
   endpoint!: string;
+}
+export class PushTestDto {
+  @ApiPropertyOptional({ description: 'Подписка этого устройства: ответ скажет, дошло ли до него' })
+  @IsOptional()
+  @IsString()
+  @Length(10, 1000)
+  @Matches(/^https:\/\//, { message: 'Адрес подписки должен быть https.' })
+  endpoint?: string;
 }
 export class PushSubscriptionDto extends PushEndpointDto {
   @ApiProperty({ type: PushKeysDto })
