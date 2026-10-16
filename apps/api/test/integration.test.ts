@@ -1210,6 +1210,11 @@ describe.sequential('real PostgreSQL, HTTP and independent Nest instances', () =
         (await call('/push/subscribe', 'POST', { endpoint: 'http://x/y', keys }, nurgul)).status,
       ).toBe(400);
       expect((await call('/push/subscribe', 'POST', { endpoint, keys }, nurgul)).status).toBe(201);
+      // Chrome on Android sends the subscription with `expirationTime: null`.
+      expect(
+        (await call('/push/subscribe', 'POST', { endpoint, expirationTime: null, keys }, nurgul))
+          .status,
+      ).toBe(201);
       expect(
         (
           (await call('/push/key', 'GET', undefined, nurgul)).body as unknown as {

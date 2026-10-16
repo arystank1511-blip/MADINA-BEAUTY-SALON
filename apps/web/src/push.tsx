@@ -15,7 +15,11 @@ const keyBytes = (base64: string) => {
     .replace(/_/g, '/');
   return Uint8Array.from(atob(padded), (c) => c.charCodeAt(0));
 };
-const save = (s: PushSubscription) => send('/push/subscribe', 'POST', s.toJSON());
+/** Only what the server keeps: the endpoint and the two keys. */
+const save = (s: PushSubscription) => {
+  const { endpoint, keys } = s.toJSON();
+  return send('/push/subscribe', 'POST', { endpoint, keys });
+};
 const sameKey = (s: PushSubscription, key: Uint8Array) => {
   const own = s.options.applicationServerKey;
   if (!own) return true;
