@@ -16,6 +16,18 @@ describe('Telegram notifications', () => {
     expect(fetcher).not.toHaveBeenCalled();
   });
 
+  it('without TELEGRAM_CHAT_ID, writes to the owner and the master', async () => {
+    vi.stubEnv('TELEGRAM_BOT_TOKEN', 'token');
+    vi.stubEnv('TELEGRAM_CHAT_ID', undefined);
+    const fetcher = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }));
+    vi.stubGlobal('fetch', fetcher);
+    expect(await new Telegram().notify(['Заявка'])).toBe(true);
+    expect(fetcher.mock.calls.map(([, o]) => JSON.parse(o.body).chat_id)).toEqual([
+      '5980317055',
+      '6560514860',
+    ]);
+  });
+
   it('escapes HTML and sends to every configured chat', async () => {
     vi.stubEnv('TELEGRAM_BOT_TOKEN', 'token');
     vi.stubEnv('TELEGRAM_CHAT_ID', '1, 2');
