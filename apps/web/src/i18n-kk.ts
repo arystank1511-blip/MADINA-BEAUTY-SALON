@@ -352,7 +352,8 @@ export const kk: Record<string, string> = {
   Пт: 'Жм',
   Сб: 'Сб',
   Вс: 'Жс',
-  'Пн–Сб · 10:00–18:00, Вс — выходной': 'Дс–Сб · 10:00–18:00, Жс — демалыс',
+  'Пн–Пт · 10:00–18:00, Сб · 10:00–15:00, Вс — выходной':
+    'Дс–Жм · 10:00–18:00, Сб · 10:00–15:00, Жс — демалыс',
 };
 /** Kazakh month names in the genitive-like form used after a day number («15 наурыз»). */
 export const kkMonths = [
