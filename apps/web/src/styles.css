@@ -3448,6 +3448,18 @@ tr.clickable:hover td {
   display: flex;
   gap: 10px;
 }
+.md-notify-help {
+  display: grid;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 14px;
+}
+.md-notify-help ul {
+  margin: 0;
+  padding-left: 20px;
+  display: grid;
+  gap: 4px;
+}
 /* Personal visit link and waitlist */
 .manage-link {
   max-width: 520px;

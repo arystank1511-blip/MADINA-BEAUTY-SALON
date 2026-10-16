@@ -1257,6 +1257,13 @@ describe.sequential('real PostgreSQL, HTTP and independent Nest instances', () =
       expect(
         ((await call('/push/test', 'POST', {}, nurgul)).body as unknown as { sent: number }).sent,
       ).toBeGreaterThan(0);
+      // «Проверить» tells this phone whether its own notification went out.
+      expect((await call('/push/test', 'POST', { endpoint }, nurgul)).body).toMatchObject({
+        here: 'sent',
+      });
+      expect(
+        (await call('/push/test', 'POST', { endpoint: endpoint + 'gone' }, nurgul)).body,
+      ).toMatchObject({ here: 'missing' });
 
       // A new password signs the master out everywhere.
       await call('/admin/master-login', 'PUT', { email, password: 'AnotherPass456' }, admin);

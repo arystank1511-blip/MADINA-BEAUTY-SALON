@@ -5,7 +5,7 @@ import webpush from 'web-push';
 import { Db } from './db';
 import { config } from './config';
 import { AuthRequest, SessionGuard, Staff } from './auth/auth';
-import { PushSubscriptionDto, PushEndpointDto } from './dto';
+import { PushSubscriptionDto, PushEndpointDto, PushTestDto } from './dto';
 
 export interface PushMessage {
   title: string;
@@ -45,17 +45,23 @@ export class Push {
   }
   /** Sends to every staff device; forgets devices the browser has unsubscribed. Never throws. */
   async notifyStaff(message: PushMessage) {
+    return (await this.deliver(message)).filter((r) => r.ok).length;
+  }
+  /** Per-device outcome; status is the push service's HTTP code when it refused. */
+  async deliver(
+    message: PushMessage,
+  ): Promise<{ endpoint: string; ok: boolean; status?: number }[]> {
     const subscriptions = await this.db.pushSubscription.findMany({
       where: { user: { role: { in: ['ADMIN', 'MASTER'] } } },
     });
-    if (!subscriptions.length) return 0;
+    if (!subscriptions.length) return [];
     const payload = JSON.stringify({ url: '/master', ...message });
     if (process.env.PUSH_DRY_RUN === '1') {
       for (const s of subscriptions) this.sent.push({ endpoint: s.endpoint, message });
-      return subscriptions.length;
+      return subscriptions.map((s) => ({ endpoint: s.endpoint, ok: true }));
     }
     const { publicKey, privateKey } = await this.keys();
-    const results = await Promise.all(
+    return Promise.all(
       subscriptions.map(async (s) => {
         try {
           await webpush.sendNotification(
@@ -68,17 +74,16 @@ export class Push {
               timeout: 8000,
             },
           );
-          return true;
+          return { endpoint: s.endpoint, ok: true };
         } catch (e) {
           const status = (e as { statusCode?: number }).statusCode;
           if (status === 404 || status === 410)
             await this.db.pushSubscription.deleteMany({ where: { id: s.id } });
           else this.log.warn(`push failed: ${status ?? (e as Error).message}`);
-          return false;
+          return { endpoint: s.endpoint, ok: false, status };
         }
       }),
     );
-    return results.filter(Boolean).length;
   }
 }
 
@@ -121,12 +126,20 @@ export class PushController {
   @Post('test')
   @Staff()
   @ApiOperation({ summary: 'Пробное уведомление на все устройства салона' })
-  async test() {
-    const sent = await this.push.notifyStaff({
+  async test(@Body() b: PushTestDto) {
+    const results = await this.push.deliver({
       title: `${config.name}: уведомления работают`,
       body: 'Так будут приходить новые заявки с сайта и напоминания за час.',
       tag: 'test',
     });
-    return { sent };
+    const mine = b.endpoint ? results.find((r) => r.endpoint === b.endpoint) : undefined;
+    return {
+      sent: results.filter((r) => r.ok).length,
+      devices: results.length,
+      // What happened on the device that pressed «Проверить»: missing means the server
+      // does not know this subscription (it was removed), failed means the push service refused it.
+      here: !b.endpoint ? undefined : !mine ? 'missing' : mine.ok ? 'sent' : 'failed',
+      status: mine?.status,
+    };
   }
 }
